@@ -303,6 +303,15 @@ func bedrockCustomizationJobs(ctx context.Context, cfg aws.Config, _ time.Time) 
 		for paginator.HasMorePages() {
 			page, err := paginator.NextPage(ctx)
 			if err != nil {
+				// Bedrock is available in more regions than model fine-tuning.
+				// In a Bedrock region where this specific control-plane API is
+				// unavailable, AWS returns UnknownOperationException. That proves
+				// customization jobs cannot be listed or created through this API
+				// in the region; it is a signed not-applicable fact, not a missing
+				// permission. Every other error remains an error.
+				if isAWSAPIErrorCode(err, "UnknownOperationException") {
+					return nil, []string{fmt.Sprintf("%s: Bedrock model customization jobs are not supported by this regional API", regionalCfg.Region)}, count, nil
+				}
 				return nil, evidence, count, err
 			}
 			for _, summary := range page.ModelCustomizationJobSummaries {

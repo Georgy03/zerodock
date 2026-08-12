@@ -202,3 +202,12 @@ func describeErr(err error) string {
 	}
 	return err.Error()
 }
+
+// isAWSAPIErrorCode matches one exact structured AWS error code. Callers use
+// this only where AWS documents a service state through a specific exception;
+// broad string matching would risk turning a permission or network failure
+// into a clean result.
+func isAWSAPIErrorCode(err error, code string) bool {
+	var apiErr smithy.APIError
+	return errors.As(err, &apiErr) && apiErr.ErrorCode() == code
+}

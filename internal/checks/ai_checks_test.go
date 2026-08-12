@@ -1,10 +1,12 @@
 package checks
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	bedrocktypes "github.com/aws/aws-sdk-go-v2/service/bedrock/types"
+	"github.com/aws/smithy-go"
 )
 
 func TestBedrockLoggingEnabledRecognizesEveryPromptModality(t *testing.T) {
@@ -20,6 +22,21 @@ func TestBedrockLoggingEnabledRecognizesEveryPromptModality(t *testing.T) {
 	} {
 		if !bedrockLoggingEnabled(config) {
 			t.Errorf("%s logging was not recognized as enabled", name)
+		}
+	}
+}
+
+func TestUnknownOperationDetectionIsExact(t *testing.T) {
+	unknown := &smithy.GenericAPIError{Code: "UnknownOperationException", Message: "Unknown Operation"}
+	if !isAWSAPIErrorCode(unknown, "UnknownOperationException") {
+		t.Fatal("structured UnknownOperationException was not recognized")
+	}
+	for _, err := range []error{
+		&smithy.GenericAPIError{Code: "AccessDeniedException", Message: "denied"},
+		errors.New("UnknownOperationException: unstructured text"),
+	} {
+		if isAWSAPIErrorCode(err, "UnknownOperationException") {
+			t.Fatalf("unrelated error %q was incorrectly treated as regional unavailability", err)
 		}
 	}
 }
