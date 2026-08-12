@@ -82,7 +82,8 @@ func (e *Engine) Decide(accountID, controlID, question, evidenceURL string, atte
 		confidence = "High — exact control ID"
 	}
 
-	var failures, errorsOut, statements []string
+	var failures, errorsOut, statements, notInUseStatements []string
+	notInUseCount := 0
 	for _, m := range matched {
 		output, ok := verdictChecks[m.CheckID]
 		if !ok {
@@ -92,6 +93,13 @@ func (e *Engine) Decide(accountID, controlID, question, evidenceURL string, atte
 		switch output.Result.Status {
 		case checks.StatusPass:
 			statements = append(statements, m.VerifiedStatement)
+		case checks.StatusNotInUse:
+			notInUseCount++
+			if m.NotInUseStatement == "" {
+				errorsOut = append(errorsOut, m.CheckID+": no not-in-use questionnaire statement is configured")
+			} else {
+				notInUseStatements = append(notInUseStatements, m.NotInUseStatement)
+			}
 		case checks.StatusFail:
 			if len(output.Result.Findings) == 0 {
 				failures = append(failures, output.Title+" is failing")
@@ -126,6 +134,17 @@ func (e *Engine) Decide(accountID, controlID, question, evidenceURL string, atte
 	if coverage == "" {
 		coverage = "account coverage unavailable"
 	}
+	if notInUseCount == len(matched) {
+		verified := strings.Join(uniqueStrings(notInUseStatements), "; ") + ". Attested by ZeroDock across " + coverage + " on " + attestedAt.UTC().Format("2006-01-02") + "."
+		if compoundPolicy {
+			return Decision{Outcome: OutcomePartial, MatchMethod: method, ControlID: controlID, CheckIDs: checkIDs, Answer: "Partial — " + verified + " Policy/procedure documentation requires human input.", EvidenceURL: evidenceURL, Reason: "no applicable cloud resources observed; documentation portion requires human input", RestrictedAs: "policy", Confidence: confidence}
+		}
+		return Decision{Outcome: OutcomeAnswered, MatchMethod: method, ControlID: controlID, CheckIDs: checkIDs, Answer: "Not applicable — " + verified, EvidenceURL: evidenceURL, Reason: "no applicable AI/ML resources observed in the scanned AWS estate", Confidence: confidence}
+	}
+	// If some mapped services are in use and others are absent, retain both
+	// facts. The positive control statement answers the question; the absence
+	// statements make the service boundary explicit.
+	statements = append(statements, notInUseStatements...)
 	verified := strings.Join(uniqueStrings(statements), "; ") + ". Verified by ZeroDock across " + coverage + " on " + attestedAt.UTC().Format("2006-01-02") + "."
 	if compoundPolicy {
 		return Decision{Outcome: OutcomePartial, MatchMethod: method, ControlID: controlID, CheckIDs: checkIDs, Answer: "Partial — ZeroDock verifies the technical control is in effect: " + verified + " Policy/procedure documentation requires human input.", EvidenceURL: evidenceURL, Reason: "technical portion supported; documentation portion requires human input", RestrictedAs: "policy", Confidence: confidence}
@@ -193,7 +212,8 @@ func exactMatches(mappings []Mapping, rawID string) ([]Mapping, MatchMethod) {
 	}
 	var found []Mapping
 	for _, m := range mappings {
-		for _, id := range append(append([]string{}, m.CAIQIDs...), m.SOC2IDs...) {
+		ids := append(append(append([]string{}, m.CAIQIDs...), m.SOC2IDs...), m.ISO42001IDs...)
+		for _, id := range ids {
 			if normalizeControlID(id) == wanted {
 				found = append(found, m)
 				break

@@ -66,6 +66,27 @@ func TestAggregateAccountResultsPreservesWorstStatusAndAccountIdentity(t *testin
 	}
 }
 
+func TestAggregateAccountResultsKeepsNotInUseOnlyWhenEveryAccountAgrees(t *testing.T) {
+	allAbsent := aggregateAccountResults(map[string]checks.Result{
+		"111111111111": {Status: checks.StatusNotInUse, Evidence: []string{"no endpoints"}},
+		"222222222222": {Status: checks.StatusNotInUse, Evidence: []string{"no endpoints"}},
+	})
+	if allAbsent.Status != checks.StatusNotInUse {
+		t.Fatalf("all-absent status = %q, want not_in_use", allAbsent.Status)
+	}
+	if len(allAbsent.Evidence) != 2 {
+		t.Fatalf("evidence = %v, want one signed fact per account", allAbsent.Evidence)
+	}
+
+	mixed := aggregateAccountResults(map[string]checks.Result{
+		"111111111111": {Status: checks.StatusNotInUse},
+		"222222222222": {Status: checks.StatusPass, Count: 1},
+	})
+	if mixed.Status != checks.StatusPass {
+		t.Fatalf("mixed status = %q, want pass", mixed.Status)
+	}
+}
+
 func TestAccountScanErrorReferencesSingleAccountLevelExplanation(t *testing.T) {
 	result := accountScanErrorResult()
 	if result.Status != checks.StatusError {

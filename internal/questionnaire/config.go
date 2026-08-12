@@ -19,16 +19,20 @@ type Mapping struct {
 	CheckID           string     `json:"check_id"`
 	CAIQIDs           []string   `json:"caiq_ids"`
 	SOC2IDs           []string   `json:"soc2_ids"`
+	ISO42001IDs       []string   `json:"iso_42001_ids,omitempty"`
 	KeywordGroups     [][]string `json:"keyword_groups"`
 	VerifiedStatement string     `json:"verified_statement"`
+	NotInUseStatement string     `json:"not_in_use_statement,omitempty"`
 }
 
 type MappingOverride struct {
 	Disabled          *bool      `json:"disabled,omitempty"`
 	CAIQIDs           []string   `json:"caiq_ids,omitempty"`
 	SOC2IDs           []string   `json:"soc2_ids,omitempty"`
+	ISO42001IDs       []string   `json:"iso_42001_ids,omitempty"`
 	KeywordGroups     [][]string `json:"keyword_groups,omitempty"`
 	VerifiedStatement string     `json:"verified_statement,omitempty"`
+	NotInUseStatement string     `json:"not_in_use_statement,omitempty"`
 }
 
 // EvidenceGap describes language that sounds close to a scanner check but
@@ -103,8 +107,8 @@ func (c Config) validate() error {
 		if seen[m.CheckID] {
 			return fmt.Errorf("questionnaire mappings: duplicate check_id %q", m.CheckID)
 		}
-		if len(m.CAIQIDs) == 0 || len(m.SOC2IDs) == 0 || len(m.KeywordGroups) == 0 {
-			return fmt.Errorf("questionnaire mappings: check %q must include CAIQ IDs, SOC 2 IDs, and keyword groups", m.CheckID)
+		if len(m.CAIQIDs)+len(m.SOC2IDs)+len(m.ISO42001IDs) == 0 || len(m.KeywordGroups) == 0 {
+			return fmt.Errorf("questionnaire mappings: check %q must include at least one framework ID and keyword groups", m.CheckID)
 		}
 		seen[m.CheckID] = true
 	}
@@ -126,11 +130,17 @@ func (c Config) mappingsForAccount(accountID string) []Mapping {
 			if override.SOC2IDs != nil {
 				base.SOC2IDs = override.SOC2IDs
 			}
+			if override.ISO42001IDs != nil {
+				base.ISO42001IDs = override.ISO42001IDs
+			}
 			if override.KeywordGroups != nil {
 				base.KeywordGroups = override.KeywordGroups
 			}
 			if override.VerifiedStatement != "" {
 				base.VerifiedStatement = override.VerifiedStatement
+			}
+			if override.NotInUseStatement != "" {
+				base.NotInUseStatement = override.NotInUseStatement
 			}
 		}
 		out = append(out, base)

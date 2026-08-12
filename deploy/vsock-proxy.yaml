@@ -48,3 +48,12 @@ allowlist:
 
   - {address: guardduty.us-east-1.amazonaws.com, port: 443}
   - {address: guardduty.us-east-2.amazonaws.com, port: 443}
+
+  - {address: bedrock.us-east-1.amazonaws.com, port: 443}
+  - {address: bedrock.us-east-2.amazonaws.com, port: 443}
+
+  - {address: api.sagemaker.us-east-1.amazonaws.com, port: 443}
+  - {address: api.sagemaker.us-east-2.amazonaws.com, port: 443}
+
+  - {address: logs.us-east-1.amazonaws.com, port: 443}
+  - {address: logs.us-east-2.amazonaws.com, port: 443}

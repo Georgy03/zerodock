@@ -31,9 +31,12 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         # SecurityAudit currently covers all scanner read calls across EC2,
-        # RDS, S3, CloudTrail, IAM, KMS, and GuardDuty. KMS key policies can
-        # independently deny GetKeyRotationStatus; that becomes an explicit
-        # check error. Only source-side sts:AssumeRole is added separately.
+        # RDS, S3, CloudTrail, IAM, KMS, GuardDuty, Bedrock, SageMaker, and
+        # CloudWatch Logs. The AI checks use only Bedrock Get/List,
+        # SageMaker Describe/List, and Logs Describe calls included in the
+        # current managed policy. Resource policies and SCPs can still deny a
+        # call; that becomes an explicit check error. Only source-side
+        # sts:AssumeRole is added separately.
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/SecurityAudit"
 
 Outputs:

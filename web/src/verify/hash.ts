@@ -138,6 +138,9 @@ function buildResultForHashing(result: CheckResult): Record<string, unknown> {
     count: result.count,
   };
   if (result.region) obj.region = result.region;
+  // Evidence was appended to checks.Result with omitempty. Preserve the Go
+  // field order and omit it for legacy reports so their hashes remain valid.
+  if (result.evidence && result.evidence.length > 0) obj.evidence = result.evidence;
   return obj;
 }
 

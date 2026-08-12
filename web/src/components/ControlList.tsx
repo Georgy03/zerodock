@@ -26,7 +26,7 @@ export function ControlList({ resp }: { resp: ShareResponse }) {
     <ul className="control-list">
       {entries.map(([id, check]) => {
         const accountResults = Object.values(check.accounts ?? {});
-        const accountPasses = accountResults.filter((result) => result.status === "pass").length;
+        const accountPasses = accountResults.filter((result) => result.status === "pass" || result.status === "not_in_use").length;
         return (
         <li key={id} className={`control-item control-item--${check.result.status}`}>
           <div className="control-item__header">
@@ -44,10 +44,18 @@ export function ControlList({ resp }: { resp: ShareResponse }) {
               ))}
             </ul>
           )}
+          {check.result.evidence && check.result.evidence.length > 0 && (
+            <ul className="control-item__evidence">
+              {check.result.evidence.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+          )}
           <div className="control-item__meta">
+            {check.result.status === "not_in_use" ? "No applicable AI/ML resources observed · " : ""}
             {check.result.count} resource{check.result.count === 1 ? "" : "s"} examined
             {check.result.region ? ` in ${check.result.region}` : ""}
-            {accountResults.length > 0 ? ` · ${accountPasses}/${accountResults.length} accounts passing` : ""}
+            {accountResults.length > 0 ? ` · ${accountPasses}/${accountResults.length} accounts without findings` : ""}
           </div>
         </li>
         );

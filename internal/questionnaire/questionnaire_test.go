@@ -171,6 +171,64 @@ func TestDecision_ErrorAndUnmatchedStayBlank(t *testing.T) {
 	}
 }
 
+func TestDecision_NotInUseProducesAnAttestedNotApplicableAnswer(t *testing.T) {
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Mappings = []Mapping{{
+		CheckID:           "aws.sagemaker.endpoint_encryption",
+		CAIQIDs:           []string{"AIS-TEST"},
+		SOC2IDs:           []string{"CC6.1"},
+		ISO42001IDs:       []string{"A.6"},
+		KeywordGroups:     [][]string{{"machine learning", "encryption"}},
+		VerifiedStatement: "SageMaker endpoints use KMS",
+		NotInUseStatement: "No SageMaker inference endpoints were found",
+	}}
+	verdict := map[string]report.CheckOutput{
+		"aws.sagemaker.endpoint_encryption": {
+			Title:  "SageMaker encryption",
+			Result: checks.Result{Status: checks.StatusNotInUse, Evidence: []string{"no endpoints"}},
+		},
+	}
+	d := NewEngine(cfg).Decide("123", "AIS-TEST", "Are machine-learning endpoints encrypted?", "https://verify.example/share/t", testTime, "2 of 2 listed AWS accounts", verdict)
+	if d.Outcome != OutcomeAnswered || !strings.HasPrefix(d.Answer, "Not applicable — ") {
+		t.Fatalf("not-in-use decision = %#v", d)
+	}
+	if !strings.Contains(d.Answer, "2 of 2 listed AWS accounts") {
+		t.Fatalf("not-in-use answer omitted coverage: %q", d.Answer)
+	}
+}
+
+func TestDecision_AIInventoryKeywordsStayFactual(t *testing.T) {
+	checksOut := map[string]report.CheckOutput{
+		"aws.bedrock.model_access": {
+			Title:  "Bedrock model access",
+			Result: checks.Result{Status: checks.StatusPass, Count: 2, Evidence: []string{"us-east-1: model.example"}},
+		},
+		"aws.bedrock.customization_jobs": {
+			Title:  "Bedrock customization jobs",
+			Result: checks.Result{Status: checks.StatusNotInUse, Evidence: []string{"no customization jobs"}},
+		},
+	}
+	engine := testEngine(t)
+	models := engine.Decide("123", "", "Which foundation models are enabled?", "https://verify.example/share/t", testTime, "2 of 2 listed AWS accounts", checksOut)
+	if models.Outcome != OutcomeAnswered || len(models.CheckIDs) != 1 || models.CheckIDs[0] != "aws.bedrock.model_access" || !strings.Contains(models.Answer, "availability is not proof of invocation") {
+		t.Fatalf("model inventory decision = %#v", models)
+	}
+	training := engine.Decide("123", "", "Where is model training data stored?", "https://verify.example/share/t", testTime, "2 of 2 listed AWS accounts", checksOut)
+	if training.Outcome != OutcomeAnswered || !strings.HasPrefix(training.Answer, "Not applicable — ") {
+		t.Fatalf("training-data decision = %#v", training)
+	}
+}
+
+func TestDecision_BroadSaaSAIUseQuestionStaysHuman(t *testing.T) {
+	d := testEngine(t).Decide("123", "", "Do you use an AI vendor such as ChatGPT?", "https://verify.example/share/t", testTime, "2 of 2 listed AWS accounts", map[string]report.CheckOutput{})
+	if d.Outcome != OutcomeNeedsHuman || d.Confidence != "None — evidence gap" || !strings.Contains(d.Reason, "SaaS AI tools") {
+		t.Fatalf("broad SaaS AI question must remain human: %#v", d)
+	}
+}
+
 func TestDecision_AccountOverrideIsDataDriven(t *testing.T) {
 	cfg, err := LoadConfig("")
 	if err != nil {

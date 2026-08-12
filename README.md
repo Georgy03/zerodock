@@ -13,7 +13,7 @@ network connection instead — see `--mock-attest` below.
 ```
 cmd/scanner/         CLI entrypoint: loads AWS config, runs every check, attests, prints JSON
 cmd/api/              Week-5 backend server entrypoint (env-var configured; see "Backend" below)
-internal/checks/      Check interface, the 11 checks, and the multi-region runner
+internal/checks/      Check interface, registered checks, and the multi-region runner
 internal/providers/   AWS-specific helpers (region enumeration, per-region config) with no
                        dependency on internal/checks — keeps a future second provider trivial
 internal/attest/      Attester interface + mock and Nitro NSM implementations; low-level
@@ -184,7 +184,8 @@ instance/task role, etc.) — nothing AWS-specific needs to be passed on the
 command line.
 
 The scanning role needs read-only security-metadata permissions for EC2, RDS,
-S3, IAM, CloudTrail, KMS, GuardDuty, and STS. AWS's current managed
+S3, IAM, CloudTrail, KMS, GuardDuty, Bedrock, SageMaker, CloudWatch Logs, and
+STS. AWS's current managed
 [`SecurityAudit`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/SecurityAudit.html)
 policy covers every check call, including:
 
@@ -199,8 +200,14 @@ policy covers every check call, including:
 - `iam:Get*` and `iam:List*`, including the account password policy;
 - `kms:List*`, `kms:Describe*`, and `kms:Get*`, including key rotation status;
 - `guardduty:List*` and `guardduty:Get*` for detector state.
+- the specific Bedrock `Get*`/`List*` calls used for invocation logging,
+  guardrails, foundation-model availability, and customization jobs;
+- `sagemaker:List*` and `sagemaker:Describe*` for endpoints, endpoint configs,
+  and notebook instances;
+- `logs:Describe*` for Bedrock CloudWatch log-group encryption and resource
+  policies.
 
-No additional member-role IAM statement is required for these ten checks.
+No additional member-role IAM statement is required for these checks.
 Two existing management-plane exceptions remain: the scanner role needs the
 narrow `sts:AssumeRole` statement shown below, and the management account
 needs Organizations enumeration access. KMS also evaluates each key's key
@@ -236,6 +243,22 @@ go run ./cmd/scanner --mock-attest --regions us-east-1,eu-west-1
 The report's `scanned_regions` is the intersection of what you asked for and
 what AWS actually reports as enabled for the account — never broader than
 either one, so the report can't claim coverage it didn't have.
+
+### AI/ML evidence boundary
+
+The Bedrock and SageMaker checks cover AI services and resources running in
+the vendor's **own scanned AWS accounts only**. They do not detect employee use
+of SaaS AI products such as ChatGPT, Claude, or Gemini, browser extensions, or
+AI workloads in an unscanned account/provider.
+
+AI inventory uses a distinct `not_in_use` result when AWS proves that no
+applicable resource exists (for example, no SageMaker endpoints or no Bedrock
+customization jobs). Bedrock foundation-model availability is explicitly
+reported as availability, not usage: AWS can authorize serverless models
+without creating a persistent resource. If Bedrock invocation logging is
+disabled, that check fails and says actual invocation cannot be ruled out.
+ZeroDock therefore never turns missing telemetry into a false estate-wide
+“no AI services in use” claim.
 
 ### Organization-wide account coverage
 

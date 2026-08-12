@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -46,12 +47,23 @@ func TestEndpointTable_IAMIsGlobalNotRegional(t *testing.T) {
 // happens to run in the missing region, per the comment on
 // VsockDialer.DialContext.
 func TestEndpointTable_HasBothRegionsForRegionalServices(t *testing.T) {
-	regionalServices := []string{"ec2", "rds", "s3", "cloudtrail", "sts", "kms", "guardduty"}
+	regionalServices := []string{"ec2", "rds", "s3", "cloudtrail", "sts", "kms", "guardduty", "bedrock"}
 	for _, svc := range regionalServices {
 		for _, region := range []string{"us-east-1", "us-east-2"} {
 			host := svc + "." + region + ".amazonaws.com"
 			if _, ok := hostnameToVsockPort[host]; !ok {
 				t.Errorf("missing endpoint table entry for %q", host)
+			}
+		}
+	}
+	for service, pattern := range map[string]string{
+		"SageMaker":       "api.sagemaker.%s.amazonaws.com",
+		"CloudWatch Logs": "logs.%s.amazonaws.com",
+	} {
+		for _, region := range []string{"us-east-1", "us-east-2"} {
+			host := fmt.Sprintf(pattern, region)
+			if _, ok := hostnameToVsockPort[host]; !ok {
+				t.Errorf("missing %s endpoint table entry for %q", service, host)
 			}
 		}
 	}

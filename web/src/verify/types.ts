@@ -13,10 +13,11 @@ export type Tier = "provider_attested" | "actively_probed" | "infra_only";
 
 /** Mirrors internal/checks.Result. */
 export interface CheckResult {
-  status: "pass" | "fail" | "error";
+  status: "pass" | "fail" | "error" | "not_in_use";
   findings: string[] | null;
   count: number;
   region?: string;
+  evidence?: string[];
 }
 
 /** Mirrors internal/report.CheckOutput. */

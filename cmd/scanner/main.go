@@ -386,7 +386,8 @@ func accountScanErrorResult() checks.Result {
 }
 
 // aggregateAccountResults folds account-specific evidence into the existing
-// control summary. Error outranks fail, which outranks pass; counts are summed;
+// control summary. Error outranks fail, which outranks pass, which outranks an
+// all-accounts not_in_use result; counts are summed;
 // and every finding is prefixed with its account so an organization-wide
 // result can never make ownership ambiguous.
 func aggregateAccountResults(accountResults map[string]checks.Result) checks.Result {
@@ -396,12 +397,19 @@ func aggregateAccountResults(accountResults map[string]checks.Result) checks.Res
 	}
 	sort.Strings(accountIDs)
 
-	aggregated := checks.Result{Status: checks.StatusPass}
+	// Start at not_in_use so the aggregate retains that explicit state only
+	// when every scanned account reported it. A single account with applicable
+	// resources promotes the aggregate to pass; fail and error still take
+	// precedence so absence can never hide a problem or permission gap.
+	aggregated := checks.Result{Status: checks.StatusNotInUse}
 	for _, accountID := range accountIDs {
 		result := accountResults[accountID]
 		aggregated.Count += result.Count
 		for _, finding := range result.Findings {
 			aggregated.Findings = append(aggregated.Findings, fmt.Sprintf("account %s: %s", accountID, finding))
+		}
+		for _, evidence := range result.Evidence {
+			aggregated.Evidence = append(aggregated.Evidence, fmt.Sprintf("account %s: %s", accountID, evidence))
 		}
 		switch result.Status {
 		case checks.StatusError:
@@ -410,6 +418,15 @@ func aggregateAccountResults(accountResults map[string]checks.Result) checks.Res
 			if aggregated.Status != checks.StatusError {
 				aggregated.Status = checks.StatusFail
 			}
+		case checks.StatusPass:
+			if aggregated.Status != checks.StatusError && aggregated.Status != checks.StatusFail {
+				aggregated.Status = checks.StatusPass
+			}
+		case checks.StatusNotInUse:
+			// Keep not_in_use only while every account remains not_in_use.
+		default:
+			aggregated.Status = checks.StatusError
+			aggregated.Findings = append(aggregated.Findings, fmt.Sprintf("account %s: invalid check status %q", accountID, result.Status))
 		}
 	}
 	return aggregated

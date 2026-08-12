@@ -55,6 +55,12 @@ const (
 	portKMSUsEast2          = 8114
 	portGuardDutyUsEast1    = 8115
 	portGuardDutyUsEast2    = 8116
+	portBedrockUsEast1      = 8117
+	portBedrockUsEast2      = 8118
+	portSageMakerUsEast1    = 8119
+	portSageMakerUsEast2    = 8120
+	portCloudWatchLogsEast1 = 8121
+	portCloudWatchLogsEast2 = 8122
 
 	// VsockPortCredentials is the dedicated port the enclave connects to
 	// ONCE at startup to receive its temporary AWS credentials from the
@@ -110,6 +116,16 @@ var hostnameToVsockPort = map[string]uint32{
 
 	"guardduty.us-east-1.amazonaws.com": portGuardDutyUsEast1,
 	"guardduty.us-east-2.amazonaws.com": portGuardDutyUsEast2,
+
+	"bedrock.us-east-1.amazonaws.com": portBedrockUsEast1,
+	"bedrock.us-east-2.amazonaws.com": portBedrockUsEast2,
+
+	// SageMaker's control-plane hostname includes the "api." prefix.
+	"api.sagemaker.us-east-1.amazonaws.com": portSageMakerUsEast1,
+	"api.sagemaker.us-east-2.amazonaws.com": portSageMakerUsEast2,
+
+	"logs.us-east-1.amazonaws.com": portCloudWatchLogsEast1,
+	"logs.us-east-2.amazonaws.com": portCloudWatchLogsEast2,
 }
 
 // vsockPortForHostname resolves both ordinary AWS service endpoints and S3's

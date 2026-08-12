@@ -6,7 +6,9 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.43.5
 	github.com/aws/aws-sdk-go-v2/config v1.32.36
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.35
+	github.com/aws/aws-sdk-go-v2/service/bedrock v1.66.5
 	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.58.5
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.82.1
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.321.1
 	github.com/aws/aws-sdk-go-v2/service/guardduty v1.85.5
 	github.com/aws/aws-sdk-go-v2/service/iam v1.58.2
@@ -14,6 +16,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/organizations v1.53.7
 	github.com/aws/aws-sdk-go-v2/service/rds v1.124.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.1
+	github.com/aws/aws-sdk-go-v2/service/sagemaker v1.266.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.45.5
 	github.com/aws/smithy-go v1.27.7
 	github.com/fxamacker/cbor/v2 v2.9.2

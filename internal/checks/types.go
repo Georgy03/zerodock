@@ -48,8 +48,8 @@ const (
 // answers into one report.
 type Result struct {
 	// Status is one of "pass" (no problems found), "fail" (problems
-	// found — see Findings), or "error" (we couldn't even finish the
-	// check, usually because of a missing AWS permission).
+	// found — see Findings), "error" (we couldn't finish the check), or
+	// "not_in_use" (AWS proved there were no applicable resources).
 	Status string `json:"status"`
 
 	// Findings is a list of plain-English sentences describing each
@@ -69,15 +69,24 @@ type Result struct {
 	// left blank — the region for each finding is instead written
 	// directly into that finding's sentence.
 	Region string `json:"region,omitempty"`
+
+	// Evidence records factual inventory discovered by a successful check,
+	// such as enabled Bedrock model IDs or the S3 location used by a model
+	// customization job. It is separate from Findings so useful facts never
+	// masquerade as security problems. This field is part of the attested wire
+	// format; append-only placement and omitempty preserve verification of old
+	// reports that predate it.
+	Evidence []string `json:"evidence,omitempty"`
 }
 
-// These are the only three valid values for Result.Status. Using named
+// These are the only four valid values for Result.Status. Using named
 // constants instead of typing "pass"/"fail"/"error" by hand everywhere
 // means the compiler catches typos for us.
 const (
-	StatusPass  = "pass"
-	StatusFail  = "fail"
-	StatusError = "error"
+	StatusPass     = "pass"
+	StatusFail     = "fail"
+	StatusError    = "error"
+	StatusNotInUse = "not_in_use"
 )
 
 // Check bundles together everything you need to know about one inspection:

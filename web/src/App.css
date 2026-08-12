@@ -387,6 +387,10 @@ select {
   box-shadow: inset 4px 0 0 var(--error);
 }
 
+.control-item--not_in_use {
+  border-color: color-mix(in srgb, #4f86c6 45%, var(--line));
+}
+
 .control-item__header {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -405,6 +409,7 @@ select {
 .status-dot--pass { background: var(--pass); }
 .status-dot--fail { background: var(--fail); }
 .status-dot--error { background: var(--error); }
+.status-dot--not_in_use { background: #4f86c6; }
 
 .control-item__title {
   min-width: 0;
@@ -441,6 +446,15 @@ select {
 }
 
 .control-item__findings li + li {
+  margin-top: 0.3rem;
+}
+
+.control-item__evidence {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+}
+
+.control-item__evidence li + li {
   margin-top: 0.3rem;
 }
 

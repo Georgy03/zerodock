@@ -40,6 +40,11 @@ func requestedRegions(ctx context.Context) []string {
 //   - err: non-nil if something went wrong (usually a permissions error)
 type RegionFunc func(ctx context.Context, regionalCfg aws.Config) (findings []string, count int, err error)
 
+// RegionDetailsFunc is the evidence-producing form used by inventory-style
+// checks. Evidence contains successful factual observations; findings remain
+// reserved for conditions that make the check fail.
+type RegionDetailsFunc func(ctx context.Context, regionalCfg aws.Config) (findings, evidence []string, count int, err error)
+
 // RunAcrossRegions is a helper that does the repetitive part of a regional
 // check for you:
 //  1. Ask AWS which regions are turned on for this account.
@@ -52,6 +57,15 @@ type RegionFunc func(ctx context.Context, regionalCfg aws.Config) (findings []st
 // check's Status becomes "error", and the specific reason is added to
 // Findings — so a missing permission is always visible, never hidden.
 func RunAcrossRegions(ctx context.Context, cfg aws.Config, fn RegionFunc) (Result, error) {
+	return RunAcrossRegionsDetailed(ctx, cfg, func(ctx context.Context, cfg aws.Config) ([]string, []string, int, error) {
+		findings, count, err := fn(ctx, cfg)
+		return findings, nil, count, err
+	})
+}
+
+// RunAcrossRegionsDetailed applies the same region scope and error-honesty
+// rules as RunAcrossRegions while also retaining successful inventory facts.
+func RunAcrossRegionsDetailed(ctx context.Context, cfg aws.Config, fn RegionDetailsFunc) (Result, error) {
 	// Step 1: find out which regions this AWS account actually uses.
 	// Some AWS regions are "opt-in" and disabled by default, so we only
 	// want to scan regions that are actually turned on.
@@ -71,6 +85,7 @@ func RunAcrossRegions(ctx context.Context, cfg aws.Config, fn RegionFunc) (Resul
 	}
 
 	var findings []string // problems found, from every region combined
+	var evidence []string // successful facts, from every region combined
 	total := 0            // total number of resources looked at
 
 	// regionsByErrorMessage groups regions by the EXACT error message
@@ -89,7 +104,7 @@ func RunAcrossRegions(ctx context.Context, cfg aws.Config, fn RegionFunc) (Resul
 		// interfere with each other.)
 		regionalCfg := providers.ForRegion(cfg, region)
 
-		regionFindings, count, err := fn(ctx, regionalCfg)
+		regionFindings, regionEvidence, count, err := fn(ctx, regionalCfg)
 		if err != nil {
 			// Something went wrong in this region (e.g. "access
 			// denied"). Remember which region hit which message, and
@@ -101,6 +116,7 @@ func RunAcrossRegions(ctx context.Context, cfg aws.Config, fn RegionFunc) (Resul
 		}
 
 		findings = append(findings, regionFindings...)
+		evidence = append(evidence, regionEvidence...)
 		total += count
 	}
 
@@ -113,6 +129,7 @@ func RunAcrossRegions(ctx context.Context, cfg aws.Config, fn RegionFunc) (Resul
 			Status:   StatusError,
 			Findings: append(findings, collapseRegionErrors(regionsByErrorMessage)...),
 			Count:    total,
+			Evidence: evidence,
 		}, nil
 	}
 
@@ -122,7 +139,20 @@ func RunAcrossRegions(ctx context.Context, cfg aws.Config, fn RegionFunc) (Resul
 	if len(findings) > 0 {
 		status = StatusFail
 	}
-	return Result{Status: status, Findings: findings, Count: total}, nil
+	return Result{Status: status, Findings: findings, Count: total, Evidence: evidence}, nil
+}
+
+// MarkNotInUse converts an otherwise-clean zero-resource inventory result to
+// the explicit state questionnaires need. Errors and failures are never
+// rewritten, so a permission gap cannot turn into a positive absence claim.
+func MarkNotInUse(result Result, evidence string) Result {
+	if result.Status == StatusPass && result.Count == 0 {
+		result.Status = StatusNotInUse
+		if evidence != "" {
+			result.Evidence = append(result.Evidence, evidence)
+		}
+	}
+	return result
 }
 
 // collapseRegionErrors turns "which regions failed with which message" into

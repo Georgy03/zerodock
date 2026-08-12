@@ -50,6 +50,12 @@ ENDPOINTS=(
 	"8114:kms.us-east-2.amazonaws.com"
 	"8115:guardduty.us-east-1.amazonaws.com"
 	"8116:guardduty.us-east-2.amazonaws.com"
+	"8117:bedrock.us-east-1.amazonaws.com"
+	"8118:bedrock.us-east-2.amazonaws.com"
+	"8119:api.sagemaker.us-east-1.amazonaws.com"
+	"8120:api.sagemaker.us-east-2.amazonaws.com"
+	"8121:logs.us-east-1.amazonaws.com"
+	"8122:logs.us-east-2.amazonaws.com"
 )
 
 pids=()

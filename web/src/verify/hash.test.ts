@@ -152,6 +152,35 @@ describe("computeResultsHashHex — field order and omitempty", () => {
     };
     expect(await computeResultsHashHex(withRegion)).not.toBe(await computeResultsHashHex(withoutRegion));
   });
+
+  it("includes signed evidence after region and omits it for legacy results", async () => {
+    const withEvidence: AttestedContent = {
+      ...baseContent(),
+      checks: {
+        "aws.bedrock.model_access": {
+          title: "Bedrock model inventory",
+          tier: "provider_attested",
+          result: {
+            status: "pass",
+            findings: null,
+            count: 1,
+            region: "us-east-1",
+            evidence: ["us-east-1: model.example (Example)"],
+          },
+        },
+      },
+    };
+    const withoutEvidence: AttestedContent = {
+      ...withEvidence,
+      checks: {
+        "aws.bedrock.model_access": {
+          ...withEvidence.checks["aws.bedrock.model_access"],
+          result: { status: "pass", findings: null, count: 1, region: "us-east-1" },
+        },
+      },
+    };
+    expect(await computeResultsHashHex(withEvidence)).not.toBe(await computeResultsHashHex(withoutEvidence));
+  });
 });
 
 describe("checkResultsHash", () => {

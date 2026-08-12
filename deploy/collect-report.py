@@ -7,7 +7,7 @@ match transport.VsockPortReport in internal/transport/endpoints.go,
 currently 8300), accepts exactly ONE connection, reads whatever the
 enclave sends until it closes the connection (EOF), writes that payload to
 a timestamped file under ./reports/, and prints a one-line summary (scan
-ID, account, pass/fail/error counts) so a human watching `make run-enclave`
+ID, account, pass/fail/error/not-in-use counts) so a human watching `make run-enclave`
 can immediately see whether the scan looks right without having to open
 the file.
 
@@ -70,7 +70,7 @@ def write_report(payload: bytes, reports_dir: str) -> str:
 
 def print_summary(payload: bytes, path: str) -> None:
     """Print one line summarizing the report: scan ID, account, and how
-    many checks came back pass/fail/error. If the payload isn't valid
+    many checks came back pass/fail/error/not_in_use. If the payload isn't valid
     JSON, say so explicitly instead of crashing — the file is still saved
     either way, so nothing is lost.
     """
@@ -83,7 +83,7 @@ def print_summary(payload: bytes, path: str) -> None:
     scan_id = report.get("scan_id", "?")
     account_id = report.get("account_id", "?")
 
-    counts = {"pass": 0, "fail": 0, "error": 0}
+    counts = {"pass": 0, "fail": 0, "error": 0, "not_in_use": 0}
     for check in report.get("checks", {}).values():
         status = check.get("result", {}).get("status")
         if status in counts:

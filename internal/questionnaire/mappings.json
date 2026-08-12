@@ -3,7 +3,8 @@
   "framework_version": "CAIQ v4.1.0",
   "sources": {
     "caiq": "https://cloudsecurityalliance.org/artifacts/star-level-1-security-questionnaire-caiq-v4/",
-    "ccm": "https://cloudsecurityalliance.org/artifacts/cloud-controls-matrix-v4"
+    "ccm": "https://cloudsecurityalliance.org/artifacts/cloud-controls-matrix-v4",
+    "iso_42001": "https://www.iso.org/standard/81230.html"
   },
   "minutes_per_answer": 5,
   "minutes_per_flag": 3,
@@ -22,6 +23,10 @@
     {
       "keyword_groups": [["backup", "tested"], ["backups", "tested"], ["restore", "tested"], ["recovery", "tested"]],
       "reason": "RDS backup retention does not prove backups or restores are tested"
+    },
+    {
+      "keyword_groups": [["ai vendor"], ["do you use", "artificial intelligence"], ["do you use", "generative ai"], ["saas", "artificial intelligence"], ["chatgpt"]],
+      "reason": "AWS-account evidence does not prove employee use of SaaS AI tools or that an available foundation model was actually invoked"
     }
   ],
   "mappings": [
@@ -171,6 +176,76 @@
       "soc2_ids": ["CC7.2", "CC7.3"],
       "keyword_groups": [["guardduty"], ["threat detection", "aws"], ["malicious activity", "detection"], ["cloud", "threat monitoring"]],
       "verified_statement": "GuardDuty has an enabled detector in every scanned region"
+    },
+    {
+      "check_id": "aws.bedrock.invocation_logging",
+      "caiq_ids": ["LOG-09", "LOG-10"],
+      "soc2_ids": ["CC7.2", "CC7.3", "C1.1"],
+      "iso_42001_ids": ["8.1", "9.1", "A.6", "A.8"],
+      "keyword_groups": [["artificial intelligence", "logging"], ["machine learning", "logging"], ["large language model", "logging"], ["llm", "logging"], ["generative ai", "logging"], ["prompt", "logging"], ["inference", "logging"]],
+      "verified_statement": "Bedrock model invocation logging is enabled and its prompt-log destinations are encrypted and non-public"
+    },
+    {
+      "check_id": "aws.bedrock.guardrails",
+      "caiq_ids": [],
+      "soc2_ids": ["CC7.2", "CC7.3"],
+      "iso_42001_ids": ["6.1", "8.1", "A.5", "A.6"],
+      "keyword_groups": [["artificial intelligence", "guardrail"], ["machine learning", "guardrail"], ["large language model", "guardrail"], ["llm", "safety"], ["generative ai", "guardrail"], ["foundation model", "guardrail"]],
+      "verified_statement": "Configured Bedrock guardrails are READY",
+      "not_in_use_statement": "No Bedrock guardrail resources were found; this does not by itself prove Bedrock was never invoked"
+    },
+    {
+      "check_id": "aws.bedrock.model_access",
+      "caiq_ids": [],
+      "soc2_ids": ["CC2.3", "CC9.2"],
+      "iso_42001_ids": ["4.3", "8.1", "A.4", "A.10"],
+      "keyword_groups": [["artificial intelligence", "model access"], ["machine learning", "model access"], ["large language model", "enabled"], ["large language models", "enabled"], ["large language model", "access"], ["large language models", "access"], ["llm", "enabled"], ["llm", "model access"], ["generative ai", "model access"], ["ai vendor", "model access"], ["foundation model", "enabled"], ["foundation models", "enabled"], ["foundation model", "access"], ["foundation models", "access"], ["which models"]],
+      "verified_statement": "The attested evidence inventories Bedrock foundation models that AWS reports as authorized and entitled; availability is not proof of invocation"
+    },
+    {
+      "check_id": "aws.bedrock.customization_jobs",
+      "caiq_ids": [],
+      "soc2_ids": ["CC6.1", "C1.1", "P4.1"],
+      "iso_42001_ids": ["8.1", "A.6", "A.7"],
+      "keyword_groups": [["artificial intelligence", "training data"], ["machine learning", "training data"], ["large language model", "training"], ["llm", "training"], ["generative ai", "training data"], ["model training"], ["training data"], ["fine-tuning"]],
+      "verified_statement": "Bedrock model customization jobs and their S3 training-data locations are inventoried in the attested evidence",
+      "not_in_use_statement": "No Bedrock model customization or fine-tuning jobs were found"
+    },
+    {
+      "check_id": "aws.sagemaker.endpoint_encryption",
+      "caiq_ids": ["CEK-03"],
+      "soc2_ids": ["CC6.1", "C1.1"],
+      "iso_42001_ids": ["8.1", "A.6", "A.7"],
+      "keyword_groups": [["artificial intelligence", "encryption at rest"], ["machine learning", "encryption"], ["inference", "encryption"], ["sagemaker", "kms"]],
+      "verified_statement": "SageMaker inference endpoints use KMS encryption",
+      "not_in_use_statement": "No SageMaker inference endpoints were found"
+    },
+    {
+      "check_id": "aws.sagemaker.endpoint_network",
+      "caiq_ids": [],
+      "soc2_ids": ["CC6.6", "CC6.7"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["artificial intelligence", "vpc"], ["machine learning", "vpc"], ["inference", "network"], ["sagemaker", "vpc"]],
+      "verified_statement": "SageMaker inference endpoints are deployed inside a VPC",
+      "not_in_use_statement": "No SageMaker inference endpoints were found"
+    },
+    {
+      "check_id": "aws.sagemaker.notebook_internet",
+      "caiq_ids": [],
+      "soc2_ids": ["CC6.6", "CC6.7"],
+      "iso_42001_ids": ["8.1", "A.6", "A.7"],
+      "keyword_groups": [["artificial intelligence", "internet access"], ["machine learning", "internet access"], ["sagemaker", "notebook", "internet"], ["training data", "internet"]],
+      "verified_statement": "SageMaker notebook instances have direct internet access disabled",
+      "not_in_use_statement": "No SageMaker notebook instances were found"
+    },
+    {
+      "check_id": "aws.sagemaker.notebook_encryption",
+      "caiq_ids": ["CEK-03"],
+      "soc2_ids": ["CC6.1", "C1.1"],
+      "iso_42001_ids": ["8.1", "A.6", "A.7"],
+      "keyword_groups": [["artificial intelligence", "notebook", "encryption"], ["machine learning", "notebook", "encryption"], ["sagemaker", "notebook", "kms"], ["training data", "encrypted at rest"]],
+      "verified_statement": "SageMaker notebook instances use KMS encryption",
+      "not_in_use_statement": "No SageMaker notebook instances were found"
     }
   ],
   "account_overrides": {}
