@@ -268,10 +268,11 @@ func run(mockAttest bool, requestedRegions []string) error {
 				rep.OrganizationWarning = appendWarning(rep.OrganizationWarning, message)
 				for _, check := range checks.All {
 					output := rep.Checks[check.ID]
-					output.Accounts[accountID] = checks.Result{
-						Status:   checks.StatusError,
-						Findings: []string{message},
-					}
+					// The complete AWS error is recorded once at account scope
+					// above. Repeating a long STS error under every control makes
+					// multi-account reports unreadable, so each affected control
+					// keeps only a stable pointer to that attested explanation.
+					output.Accounts[accountID] = accountScanErrorResult()
 					rep.Checks[check.ID] = output
 				}
 				continue
@@ -375,6 +376,13 @@ func run(mockAttest bool, requestedRegions []string) error {
 	}
 
 	return nil
+}
+
+func accountScanErrorResult() checks.Result {
+	return checks.Result{
+		Status:   checks.StatusError,
+		Findings: []string{"account scan failed; see organization_warning"},
+	}
 }
 
 // aggregateAccountResults folds account-specific evidence into the existing

@@ -21,6 +21,10 @@ allowlist:
 
   - {address: s3.us-east-1.amazonaws.com, port: 443}
   - {address: s3.us-east-2.amazonaws.com, port: 443}
+  # Bucket-specific S3 hostnames are mapped to these two fixed regional
+  # tunnels inside endpoints.go. Do not add a literal "*.s3..." entry here:
+  # vsock-proxy's allowlist does not implement glob matching, and each proxy
+  # process validates only its fixed destination hostname at startup.
 
   - {address: cloudtrail.us-east-1.amazonaws.com, port: 443}
   - {address: cloudtrail.us-east-2.amazonaws.com, port: 443}

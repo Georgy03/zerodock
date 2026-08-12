@@ -20,6 +20,10 @@ Resources:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
+          # This is the destination side of cross-account AssumeRole. The
+          # source ZeroDockScannerRole also needs sts:AssumeRole permission;
+          # deploy-stackset.sh installs that narrow inline policy separately
+          # because service-managed StackSets exclude the management account.
           - Sid: TrustZeroDockScannerAccount
             Effect: Allow
             Principal:

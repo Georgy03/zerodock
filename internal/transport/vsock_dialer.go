@@ -63,7 +63,7 @@ func (d *VsockDialer) DialContext(ctx context.Context, network, addr string) (ne
 		host = addr
 	}
 
-	port, ok := hostnameToVsockPort[host]
+	port, ok := vsockPortForHostname(host)
 	if !ok {
 		return nil, fmt.Errorf(
 			"vsock: no vsock port configured for host %q — add it to internal/transport/endpoints.go, "+

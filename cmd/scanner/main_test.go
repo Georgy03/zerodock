@@ -66,6 +66,16 @@ func TestAggregateAccountResultsPreservesWorstStatusAndAccountIdentity(t *testin
 	}
 }
 
+func TestAccountScanErrorReferencesSingleAccountLevelExplanation(t *testing.T) {
+	result := accountScanErrorResult()
+	if result.Status != checks.StatusError {
+		t.Fatalf("status = %q, want error", result.Status)
+	}
+	if len(result.Findings) != 1 || result.Findings[0] != "account scan failed; see organization_warning" {
+		t.Fatalf("findings = %v, want one organization_warning reference", result.Findings)
+	}
+}
+
 // ScannerVersion selects the independently published PCR manifest. It must be
 // sealed into user_data so an API cannot swap the tag after attestation.
 func TestAttestedContentIncludesScannerVersion(t *testing.T) {

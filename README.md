@@ -237,7 +237,10 @@ another Organizations failure instead leaves organization verification false
 and attests `organization_warning`; none is silently relabeled as "no org."
 
 The scanner account's instance role needs its existing read-only audit access
-plus these management-plane permissions:
+plus these management-plane permissions. `deploy/deploy-stackset.sh` installs
+the narrowly scoped `sts:AssumeRole` statement on `ZeroDockScannerRole` by
+default (override the name with `SCANNER_ROLE_NAME`) because `SecurityAudit`
+does not include it:
 
 ```json
 {

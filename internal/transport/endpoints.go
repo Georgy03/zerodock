@@ -1,5 +1,7 @@
 package transport
 
+import "strings"
+
 // This file is the single source of truth for "which AWS hostname maps to
 // which vsock port". It MUST stay in sync with two other places by hand,
 // because vsock has no DNS and no service discovery of its own — a vsock
@@ -98,4 +100,29 @@ var hostnameToVsockPort = map[string]uint32{
 	"iam.amazonaws.com": portIAMGlobal,
 
 	"organizations.us-east-1.amazonaws.com": portOrganizationsGlobal,
+}
+
+// vsockPortForHostname resolves both ordinary AWS service endpoints and S3's
+// virtual-hosted-style bucket endpoints. S3 turns a request for bucket
+// "example" into example.s3.us-east-1.amazonaws.com; keeping an entry for
+// every possible bucket is impossible, so every bucket hostname for a region
+// shares that region's existing S3 tunnel.
+//
+// The leading dot in the suffix is security-significant. It accepts
+// "bucket.s3.us-east-1.amazonaws.com" but rejects lookalikes such as
+// "bucket.evil-s3.us-east-1.amazonaws.com" and
+// "s3.us-east-1.amazonaws.com.attacker.example".
+func vsockPortForHostname(host string) (uint32, bool) {
+	if port, ok := hostnameToVsockPort[host]; ok {
+		return port, true
+	}
+
+	switch {
+	case strings.HasSuffix(host, ".s3.us-east-1.amazonaws.com"):
+		return portS3UsEast1, true
+	case strings.HasSuffix(host, ".s3.us-east-2.amazonaws.com"):
+		return portS3UsEast2, true
+	}
+
+	return 0, false
 }

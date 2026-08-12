@@ -58,3 +58,34 @@ func TestEndpointTable_OrganizationsUsesItsGlobalHostedEndpoint(t *testing.T) {
 		t.Error("Organizations must not be treated as a per-region service")
 	}
 }
+
+func TestVsockPortForHostname_S3VirtualHostedStyle(t *testing.T) {
+	tests := []struct {
+		host string
+		want uint32
+	}{
+		{host: "customer-backups.s3.us-east-1.amazonaws.com", want: portS3UsEast1},
+		{host: "cf-templates-123456789012-us-east-1.s3.us-east-1.amazonaws.com", want: portS3UsEast1},
+		{host: "audit-logs.s3.us-east-2.amazonaws.com", want: portS3UsEast2},
+	}
+
+	for _, test := range tests {
+		got, ok := vsockPortForHostname(test.host)
+		if !ok || got != test.want {
+			t.Errorf("vsockPortForHostname(%q) = (%d, %t), want (%d, true)", test.host, got, ok, test.want)
+		}
+	}
+}
+
+func TestVsockPortForHostname_RejectsS3Lookalikes(t *testing.T) {
+	lookalikes := []string{
+		"customer.evil-s3.us-east-1.amazonaws.com",
+		"s3.us-east-1.amazonaws.com.attacker.example",
+		"customer.s3.us-east-1.amazonaws.com.attacker.example",
+	}
+	for _, host := range lookalikes {
+		if port, ok := vsockPortForHostname(host); ok {
+			t.Errorf("vsockPortForHostname(%q) unexpectedly returned port %d", host, port)
+		}
+	}
+}

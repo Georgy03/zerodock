@@ -8,9 +8,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="$SCRIPT_DIR/member-role.yaml"
+SOURCE_POLICY_FILE="$SCRIPT_DIR/scanner-assume-member-policy.json"
 STACK_SET_NAME="${STACK_SET_NAME:-ZeroDockScannerMemberRole}"
 STACK_SET_REGION="${AWS_REGION:-us-east-1}"
 SCANNER_ACCOUNT_ID="${1:-${SCANNER_ACCOUNT_ID:-}}"
+SCANNER_ROLE_NAME="${SCANNER_ROLE_NAME:-ZeroDockScannerRole}"
 
 if [ -z "$SCANNER_ACCOUNT_ID" ]; then
 	echo "usage: $0 <scanner-account-id>" >&2
@@ -27,6 +29,16 @@ for tool in aws; do
 		exit 1
 	fi
 done
+
+# Cross-account AssumeRole requires permission on both sides. The member-role
+# template below supplies the destination role's trust policy. SecurityAudit
+# deliberately does not grant sts:AssumeRole, so install the narrowly scoped
+# source-side permission on the management account's scanner role as well.
+echo "Allowing $SCANNER_ROLE_NAME to assume ZeroDock member audit roles..."
+aws iam put-role-policy \
+	--role-name "$SCANNER_ROLE_NAME" \
+	--policy-name ZeroDockAssumeMemberAuditRoles \
+	--policy-document "file://$SOURCE_POLICY_FILE"
 
 echo "Activating trusted AWS Organizations access for CloudFormation StackSets..."
 aws cloudformation activate-organizations-access --region "$STACK_SET_REGION"

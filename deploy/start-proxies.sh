@@ -35,6 +35,8 @@ ENDPOINTS=(
 	"8104:rds.us-east-2.amazonaws.com"
 	"8105:s3.us-east-1.amazonaws.com"
 	"8106:s3.us-east-2.amazonaws.com"
+	# The enclave maps bucket.s3.<region>.amazonaws.com to these fixed S3
+	# tunnels. vsock-proxy itself accepts a fixed destination, not a wildcard.
 	"8107:cloudtrail.us-east-1.amazonaws.com"
 	"8108:cloudtrail.us-east-2.amazonaws.com"
 	"8109:sts.us-east-1.amazonaws.com"
