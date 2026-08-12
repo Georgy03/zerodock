@@ -220,6 +220,60 @@ The report's `scanned_regions` is the intersection of what you asked for and
 what AWS actually reports as enabled for the account — never broader than
 either one, so the report can't claim coverage it didn't have.
 
+### Organization-wide account coverage
+
+When run from the AWS Organizations management account, the scanner calls
+`DescribeOrganization` and paginates `ListAccounts` to establish the complete
+account boundary. It attests `org_id`, `accounts_listed`, and
+`accounts_scanned`; each control also retains a per-account result map. A
+member enters `accounts_scanned` only after the dedicated
+`ZeroDockScannerMemberRole` was assumed successfully. A missing role therefore
+shows up as both a listed-vs-scanned coverage gap and explicit control errors.
+
+AWS's exact `AWSOrganizationsNotInUseException` is the only condition treated
+as a single-account estate. That produces `no_organization: true` and lists
+the caller account in both account arrays. AccessDenied, a partial listing, or
+another Organizations failure instead leaves organization verification false
+and attests `organization_warning`; none is silently relabeled as "no org."
+
+The scanner account's instance role needs its existing read-only audit access
+plus these management-plane permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "organizations:DescribeOrganization",
+        "organizations:ListAccounts"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::*:role/ZeroDockScannerMemberRole"
+    }
+  ]
+}
+```
+
+Deploy the read-only member role from the management account after enabling
+AWS Organizations trusted access for CloudFormation StackSets:
+
+```bash
+deploy/deploy-stackset.sh 123456789012  # scanner/management account ID
+```
+
+The script creates a `SERVICE_MANAGED` StackSet, targets the organization
+root, and enables automatic deployment for accounts added later. The member
+template attaches AWS `SecurityAudit`; it deliberately never requests
+`OrganizationAccountAccessRole`, which is administrative. Service-managed
+StackSets do not deploy into the management account itself, so its instance
+role must already have the read-only permissions needed by the checks.
+
 Build the Linux/amd64 container and EIF on a Nitro-enabled EC2 instance with
 an immutable release tag sealed into the report:
 
@@ -269,6 +323,10 @@ A single JSON document to stdout:
 {
   "scan_id": "…",
   "timestamp": "2026-08-11T12:00:00Z",
+  "organization_verified": true,
+  "org_id": "o-exampleorgid",
+  "accounts_listed": ["111111111111", "222222222222"],
+  "accounts_scanned": ["111111111111", "222222222222"],
   "account_id": "123456789012",
   "scope_verified": true,
   "time_verified": true,
@@ -278,7 +336,11 @@ A single JSON document to stdout:
     "aws.ebs.encryption": {
       "title": "Unencrypted EBS volumes",
       "tier": "provider_attested",
-      "result": { "status": "fail", "findings": ["us-east-1: unencrypted EBS volume vol-…"], "count": 4 }
+      "result": { "status": "fail", "findings": ["account 111111111111: us-east-1: unencrypted EBS volume vol-…"], "count": 4 },
+      "accounts": {
+        "111111111111": { "status": "fail", "findings": ["us-east-1: unencrypted EBS volume vol-…"], "count": 2 },
+        "222222222222": { "status": "pass", "findings": null, "count": 2 }
+      }
     },
     "…": "… one entry per registered check …"
   },
@@ -299,7 +361,9 @@ covers — a report that can't say what it scanned isn't evidence.
 intersection of `requested_regions` and whatever AWS reports as actually
 enabled (`regions_warning` names anything requested but unavailable), so
 the report can't silently claim to have scanned a region it never touched.
-All of these fields — along with `account_id` and every check result — are
+`accounts_listed` versus `accounts_scanned` applies that same honesty rule to
+the organization boundary. All of these fields — along with `account_id` and
+every aggregate and per-account check result — are
 part of what gets hashed into `results_sha384` and sealed inside the
 attestation, not just printed alongside it; see `attestedContent` in
 `cmd/scanner/main.go` for why that distinction matters (a field left OUT of
@@ -480,6 +544,7 @@ from that column, not a replacement for it.
 # apply the schema once, as a privileged/owner role
 psql "$ADMIN_DATABASE_URL" -f migrations/0001_init.sql
 psql "$ADMIN_DATABASE_URL" -f migrations/0002_scanner_version.sql
+psql "$ADMIN_DATABASE_URL" -f migrations/0003_organization_scope.sql
 
 # run the server
 DATABASE_URL="postgres://zerodock_app:...@host:5432/zerodock" go run ./cmd/api

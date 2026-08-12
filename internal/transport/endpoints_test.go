@@ -34,7 +34,7 @@ func TestEndpointTable_IAMIsGlobalNotRegional(t *testing.T) {
 }
 
 // TestEndpointTable_HasBothRegionsForRegionalServices confirms every
-// regional service (everything except IAM) has both an us-east-1 and
+// regional service (as opposed to global IAM and Organizations) has both an us-east-1 and
 // us-east-2 entry — a missing one would silently hang any check that
 // happens to run in the missing region, per the comment on
 // VsockDialer.DialContext.
@@ -47,5 +47,14 @@ func TestEndpointTable_HasBothRegionsForRegionalServices(t *testing.T) {
 				t.Errorf("missing endpoint table entry for %q", host)
 			}
 		}
+	}
+}
+
+func TestEndpointTable_OrganizationsUsesItsGlobalHostedEndpoint(t *testing.T) {
+	if _, ok := hostnameToVsockPort["organizations.us-east-1.amazonaws.com"]; !ok {
+		t.Error("missing AWS Organizations global endpoint")
+	}
+	if _, ok := hostnameToVsockPort["organizations.us-east-2.amazonaws.com"]; ok {
+		t.Error("Organizations must not be treated as a per-region service")
 	}
 }

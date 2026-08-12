@@ -1,0 +1,28 @@
+import { describe, expect, it } from "vitest";
+import { summarizeCoverage } from "./coverage";
+
+describe("summarizeCoverage", () => {
+  it("produces the signed organization-wide 18 of 18 headline", () => {
+    const accounts = Array.from({ length: 18 }, (_, index) => String(index + 1).padStart(12, "0"));
+    const summary = summarizeCoverage({
+      organization_verified: true,
+      org_id: "o-example",
+      accounts_listed: accounts,
+      accounts_scanned: accounts,
+    });
+
+    expect(summary).toMatchObject({ known: true, scanned: 18, listed: 18 });
+    expect(summary.note).toContain("Complete AWS Organization coverage verified");
+  });
+
+  it("does not invent a denominator when enumeration failed", () => {
+    const summary = summarizeCoverage({
+      organization_verified: false,
+      organization_warning: "AccessDenied",
+      accounts_scanned: ["111111111111"],
+    });
+
+    expect(summary.known).toBe(false);
+    expect(summary.note).toBe("AccessDenied");
+  });
+});

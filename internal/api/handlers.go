@@ -63,6 +63,10 @@ func (s *Server) handleCreateVerdict(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "scope_verified is false — a report that cannot confirm which account it scanned cannot be stored as evidence")
 		return
 	}
+	if scopeErr := validateOrganizationScope(sub.AttestedContent); scopeErr != "" {
+		writeError(w, http.StatusUnprocessableEntity, scopeErr)
+		return
+	}
 
 	docBytes, err := base64.StdEncoding.DecodeString(sub.Attestation.Doc)
 	if err != nil {
@@ -106,23 +110,29 @@ func (s *Server) handleCreateVerdict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v, err := s.store.CreateVerdict(r.Context(), store.NewVerdict{
-		ScannerVersion:    sub.ScannerVersion,
-		ScanID:            sub.ScanID,
-		AccountID:         sub.AccountID,
-		AttestedAt:        sub.Timestamp,
-		ScopeVerified:     sub.ScopeVerified,
-		ScopeWarning:      emptyToNil(sub.ScopeWarning),
-		TimeVerified:      sub.TimeVerified,
-		TimeWarning:       emptyToNil(sub.TimeWarning),
-		RequestedRegions:  sub.RequestedRegions,
-		ScannedRegions:    sub.ScannedRegions,
-		RegionsWarning:    emptyToNil(sub.RegionsWarning),
-		ResultsSHA384:     sub.ResultsHash,
-		Checks:            checksJSON,
-		AttestationFormat: sub.Attestation.Format,
-		AttestationMock:   outcome.Mock,
-		PCRs:              pcrsJSON,
-		AttestationRaw:    docBytes,
+		ScannerVersion:       sub.ScannerVersion,
+		OrganizationVerified: sub.OrganizationVerified,
+		OrgID:                emptyToNil(sub.OrgID),
+		NoOrganization:       sub.NoOrganization,
+		OrganizationWarning:  emptyToNil(sub.OrganizationWarning),
+		AccountsListed:       sub.AccountsListed,
+		AccountsScanned:      sub.AccountsScanned,
+		ScanID:               sub.ScanID,
+		AccountID:            sub.AccountID,
+		AttestedAt:           sub.Timestamp,
+		ScopeVerified:        sub.ScopeVerified,
+		ScopeWarning:         emptyToNil(sub.ScopeWarning),
+		TimeVerified:         sub.TimeVerified,
+		TimeWarning:          emptyToNil(sub.TimeWarning),
+		RequestedRegions:     sub.RequestedRegions,
+		ScannedRegions:       sub.ScannedRegions,
+		RegionsWarning:       emptyToNil(sub.RegionsWarning),
+		ResultsSHA384:        sub.ResultsHash,
+		Checks:               checksJSON,
+		AttestationFormat:    sub.Attestation.Format,
+		AttestationMock:      outcome.Mock,
+		PCRs:                 pcrsJSON,
+		AttestationRaw:       docBytes,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrDuplicateScan) {
@@ -140,6 +150,49 @@ func (s *Server) handleCreateVerdict(w http.ResponseWriter, r *http.Request) {
 		"share_url":  s.shareURL(v.ShareToken),
 		"mock":       outcome.Mock,
 	})
+}
+
+func validateOrganizationScope(content report.AttestedContent) string {
+	if len(content.AccountsScanned) == 0 {
+		return "accounts_scanned is empty — a report must identify every account it actually scanned"
+	}
+	if !content.OrganizationVerified {
+		if content.OrganizationWarning == "" {
+			return "organization enumeration is unverified but organization_warning is empty"
+		}
+		return ""
+	}
+	if len(content.AccountsListed) == 0 {
+		return "organization_verified is true but accounts_listed is empty"
+	}
+	if content.NoOrganization {
+		if content.OrgID != "" {
+			return "no_organization is true but org_id is also present"
+		}
+		if len(content.AccountsListed) != 1 {
+			return "no_organization is true but accounts_listed is not the single-account fallback"
+		}
+	} else if content.OrgID == "" {
+		return "organization_verified is true but neither org_id nor no_organization is present"
+	}
+
+	listed := make(map[string]struct{}, len(content.AccountsListed))
+	for _, accountID := range content.AccountsListed {
+		listed[accountID] = struct{}{}
+	}
+	for _, accountID := range content.AccountsScanned {
+		if _, ok := listed[accountID]; !ok {
+			return fmt.Sprintf("accounts_scanned contains account %s, which is absent from accounts_listed", accountID)
+		}
+	}
+	for checkID, check := range content.Checks {
+		for _, accountID := range content.AccountsListed {
+			if _, ok := check.Accounts[accountID]; !ok {
+				return fmt.Sprintf("check %s has no per-account result for listed account %s", checkID, accountID)
+			}
+		}
+	}
+	return ""
 }
 
 // handleLatest implements GET /v1/share/{token}: the buyer-facing link

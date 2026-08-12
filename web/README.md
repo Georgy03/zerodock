@@ -5,6 +5,13 @@ React + TypeScript + Vite. Fetches a scan verdict from `GET
 **entirely in this browser** — the server's word that it verified
 server-side is never treated as sufficient on its own.
 
+The headline is signed organization coverage, not a control score. It displays
+`accounts_scanned / accounts_listed` (for example `18 / 18`) only when the
+report attests successful Organizations enumeration. Explicit no-organization
+reports show the verified `1 / 1` fallback. Enumeration failures and legacy
+reports show "Coverage unknown" with the attested warning instead of inventing
+a denominator.
+
 ## Why a second, independent verifier
 
 `internal/api` already verifies every submission server-side

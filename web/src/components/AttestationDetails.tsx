@@ -16,6 +16,15 @@ export function AttestationDetails({ resp, result }: { resp: ShareResponse; resu
         <dt>Scanner version</dt>
         <dd>{resp.scanner_version ?? "(legacy report — not recorded)"}</dd>
 
+        <dt>Organization</dt>
+        <dd>{resp.no_organization ? "none (AWS-confirmed)" : (resp.org_id ?? "unverified")}</dd>
+
+        <dt>Accounts listed</dt>
+        <dd>{resp.accounts_listed?.length ?? "(legacy report)"}</dd>
+
+        <dt>Accounts scanned</dt>
+        <dd>{resp.accounts_scanned?.length ?? "(legacy report)"}</dd>
+
         <dt>Mock</dt>
         <dd>{resp.attestation.mock ? "true — NOT hardware-backed" : "false"}</dd>
 

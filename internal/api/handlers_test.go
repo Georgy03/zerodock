@@ -40,12 +40,16 @@ func validSubmission(t *testing.T) (report.Report, verify.Outcome) {
 	t.Helper()
 
 	content := report.AttestedContent{
-		ScannerVersion:   "v1.2.3",
-		AccountID:        "123456789012",
-		ScopeVerified:    true,
-		TimeVerified:     true,
-		RequestedRegions: []string{"us-east-1"},
-		ScannedRegions:   []string{"us-east-1"},
+		ScannerVersion:       "v1.2.3",
+		OrganizationVerified: true,
+		NoOrganization:       true,
+		AccountsListed:       []string{"123456789012"},
+		AccountsScanned:      []string{"123456789012"},
+		AccountID:            "123456789012",
+		ScopeVerified:        true,
+		TimeVerified:         true,
+		RequestedRegions:     []string{"us-east-1"},
+		ScannedRegions:       []string{"us-east-1"},
 		Checks: map[string]report.CheckOutput{
 			"aws.ebs.encryption": {
 				Title: "Unencrypted EBS volumes",
@@ -53,6 +57,9 @@ func validSubmission(t *testing.T) (report.Report, verify.Outcome) {
 				Result: checks.Result{
 					Status: checks.StatusPass,
 					Count:  2,
+				},
+				Accounts: map[string]checks.Result{
+					"123456789012": {Status: checks.StatusPass, Count: 2},
 				},
 			},
 		},
@@ -159,6 +166,44 @@ func TestHandleCreateVerdict_TamperedScannerVersionRejected(t *testing.T) {
 	}
 	if len(fs.verdictsByToken) != 0 {
 		t.Error("submission with a substituted scanner_version must not be persisted")
+	}
+}
+
+func TestHandleCreateVerdict_RejectsMissingPerAccountEvidence(t *testing.T) {
+	sub, outcome := validSubmission(t)
+	check := sub.Checks["aws.ebs.encryption"]
+	check.Accounts = nil
+	sub.Checks["aws.ebs.encryption"] = check
+	sub.ResultsHash = hashAttestedContent(sub.AttestedContent)
+	hashBytes, err := hex.DecodeString(sub.ResultsHash)
+	if err != nil {
+		t.Fatalf("decode hash: %v", err)
+	}
+	outcome.UserData = hashBytes
+
+	fs := newFakeStore()
+	s := newTestServer(fs, outcome, nil)
+	rec := postVerdict(t, s, sub)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusUnprocessableEntity, rec.Body.String())
+	}
+}
+
+func TestHandleCreateVerdict_RejectsScannedAccountOutsideListedScope(t *testing.T) {
+	sub, outcome := validSubmission(t)
+	sub.AccountsScanned = append(sub.AccountsScanned, "999999999999")
+	sub.ResultsHash = hashAttestedContent(sub.AttestedContent)
+	hashBytes, err := hex.DecodeString(sub.ResultsHash)
+	if err != nil {
+		t.Fatalf("decode hash: %v", err)
+	}
+	outcome.UserData = hashBytes
+
+	fs := newFakeStore()
+	s := newTestServer(fs, outcome, nil)
+	rec := postVerdict(t, s, sub)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusUnprocessableEntity, rec.Body.String())
 	}
 }
 

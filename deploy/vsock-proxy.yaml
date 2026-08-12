@@ -35,3 +35,6 @@ allowlist:
   # "complete the pattern" here and add them anyway. See the matching
   # comment on portIAMGlobal in internal/transport/endpoints.go.
   - {address: iam.amazonaws.com, port: 443}
+
+  # AWS Organizations is global but hosted in us-east-1.
+  - {address: organizations.us-east-1.amazonaws.com, port: 443}

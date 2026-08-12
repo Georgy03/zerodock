@@ -24,6 +24,8 @@ export interface CheckOutput {
   title: string;
   tier: Tier;
   result: CheckResult;
+  /** Signed per-account evidence; absent only on reports issued before org enumeration. */
+  accounts?: Record<string, CheckResult>;
 }
 
 /**
@@ -36,6 +38,12 @@ export interface CheckOutput {
 export interface AttestedContent {
   /** Added after the first reports; omitted only when verifying legacy evidence. */
   scanner_version?: string;
+  organization_verified?: boolean;
+  org_id?: string;
+  no_organization?: boolean;
+  organization_warning?: string;
+  accounts_listed?: string[];
+  accounts_scanned?: string[];
   account_id: string;
   scope_verified: boolean;
   scope_warning?: string;

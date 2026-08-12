@@ -24,7 +24,10 @@ export function ControlList({ resp }: { resp: ShareResponse }) {
 
   return (
     <ul className="control-list">
-      {entries.map(([id, check]) => (
+      {entries.map(([id, check]) => {
+        const accountResults = Object.values(check.accounts ?? {});
+        const accountPasses = accountResults.filter((result) => result.status === "pass").length;
+        return (
         <li key={id} className={`control-item control-item--${check.result.status}`}>
           <div className="control-item__header">
             <span className={`status-dot status-dot--${check.result.status}`} aria-hidden />
@@ -44,9 +47,11 @@ export function ControlList({ resp }: { resp: ShareResponse }) {
           <div className="control-item__meta">
             {check.result.count} resource{check.result.count === 1 ? "" : "s"} examined
             {check.result.region ? ` in ${check.result.region}` : ""}
+            {accountResults.length > 0 ? ` · ${accountPasses}/${accountResults.length} accounts passing` : ""}
           </div>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }

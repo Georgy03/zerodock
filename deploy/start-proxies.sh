@@ -42,6 +42,8 @@ ENDPOINTS=(
 	# IAM is global — one entry, not one per region. See the matching
 	# comment in endpoints.go and vsock-proxy.yaml before "fixing" this.
 	"8111:iam.amazonaws.com"
+	# Organizations is global but hosted at this us-east-1 endpoint.
+	"8112:organizations.us-east-1.amazonaws.com"
 )
 
 pids=()

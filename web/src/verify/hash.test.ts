@@ -10,6 +10,10 @@ import type { AttestedContent, ShareResponse } from "./types";
 function baseContent(): AttestedContent {
   return {
     scanner_version: "v1.2.3",
+    organization_verified: true,
+    no_organization: true,
+    accounts_listed: ["123456789012"],
+    accounts_scanned: ["123456789012"],
     account_id: "123456789012",
     scope_verified: true,
     time_verified: true,
@@ -25,7 +29,7 @@ describe("computeResultsHashHex — field order and omitempty", () => {
     // What Go's encoding/json.Marshal would produce for this exact
     // struct: declaration order, omitempty fields dropped entirely.
     const expectedJSON =
-      '{"scanner_version":"v1.2.3","account_id":"123456789012","scope_verified":true,"time_verified":true,"requested_regions":["us-east-1"],"scanned_regions":["us-east-1"],"checks":{}}';
+      '{"scanner_version":"v1.2.3","organization_verified":true,"no_organization":true,"accounts_listed":["123456789012"],"accounts_scanned":["123456789012"],"account_id":"123456789012","scope_verified":true,"time_verified":true,"requested_regions":["us-east-1"],"scanned_regions":["us-east-1"],"checks":{}}';
     const expectedDigest = await crypto.subtle.digest("SHA-384", new TextEncoder().encode(expectedJSON));
     const expectedHex = bytesToHex(new Uint8Array(expectedDigest));
 
@@ -45,7 +49,7 @@ describe("computeResultsHashHex — field order and omitempty", () => {
       scope_warning: "could not confirm account",
     };
     const expectedJSON =
-      '{"scanner_version":"v1.2.3","account_id":"123456789012","scope_verified":false,"scope_warning":"could not confirm account","time_verified":true,"requested_regions":["us-east-1"],"scanned_regions":["us-east-1"],"checks":{}}';
+      '{"scanner_version":"v1.2.3","organization_verified":true,"no_organization":true,"accounts_listed":["123456789012"],"accounts_scanned":["123456789012"],"account_id":"123456789012","scope_verified":false,"scope_warning":"could not confirm account","time_verified":true,"requested_regions":["us-east-1"],"scanned_regions":["us-east-1"],"checks":{}}';
     const expectedDigest = await crypto.subtle.digest("SHA-384", new TextEncoder().encode(expectedJSON));
     expect(await computeResultsHashHex(content)).toBe(bytesToHex(new Uint8Array(expectedDigest)));
   });
@@ -68,6 +72,32 @@ describe("computeResultsHashHex — field order and omitempty", () => {
     // Insertion order differs, but the hash must not — both must sort to
     // the same canonical form.
     expect(await computeResultsHashHex(inOrderA)).toBe(await computeResultsHashHex(inOrderB));
+  });
+
+  it("sorts per-account result keys and includes them after the aggregate result", async () => {
+    const accountResult = { status: "pass" as const, findings: null, count: 1 };
+    const first: AttestedContent = {
+      ...baseContent(),
+      checks: {
+        "a.check": {
+          title: "A",
+          tier: "provider_attested",
+          result: { status: "pass", findings: null, count: 2 },
+          accounts: { "222222222222": accountResult, "111111111111": accountResult },
+        },
+      },
+    };
+    const second: AttestedContent = {
+      ...first,
+      checks: {
+        "a.check": {
+          ...first.checks["a.check"],
+          accounts: { "111111111111": accountResult, "222222222222": accountResult },
+        },
+      },
+    };
+
+    expect(await computeResultsHashHex(first)).toBe(await computeResultsHashHex(second));
   });
 
   it("preserves null findings as JSON null, not an empty array", async () => {
@@ -98,7 +128,7 @@ describe("computeResultsHashHex — field order and omitempty", () => {
       },
     };
     const expectedJSON =
-      '{"scanner_version":"v1.2.3","account_id":"123456789012","scope_verified":true,"time_verified":true,"requested_regions":["us-east-1"],"scanned_regions":["us-east-1"],"checks":{"a.check":{"title":"A","tier":"provider_attested","result":{"status":"fail","findings":["security group allows \\u003call\\u003e traffic \\u0026 more"],"count":1}}}}';
+      '{"scanner_version":"v1.2.3","organization_verified":true,"no_organization":true,"accounts_listed":["123456789012"],"accounts_scanned":["123456789012"],"account_id":"123456789012","scope_verified":true,"time_verified":true,"requested_regions":["us-east-1"],"scanned_regions":["us-east-1"],"checks":{"a.check":{"title":"A","tier":"provider_attested","result":{"status":"fail","findings":["security group allows \\u003call\\u003e traffic \\u0026 more"],"count":1}}}}';
     const expectedDigest = await crypto.subtle.digest("SHA-384", new TextEncoder().encode(expectedJSON));
     expect(await computeResultsHashHex(content)).toBe(bytesToHex(new Uint8Array(expectedDigest)));
   });

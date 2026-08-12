@@ -70,13 +70,19 @@ func (s *Store) Close() {
 // layer needs to render a JSON response, plus AttestationRaw, the exact
 // bytes originally submitted.
 type Verdict struct {
-	ID             int64
-	ShareToken     string
-	ScannerVersion string
-	ScanID         string
-	AccountID      string
-	AttestedAt     time.Time
-	ReceivedAt     time.Time
+	ID                   int64
+	ShareToken           string
+	ScannerVersion       string
+	OrganizationVerified bool
+	OrgID                *string
+	NoOrganization       bool
+	OrganizationWarning  *string
+	AccountsListed       []string
+	AccountsScanned      []string
+	ScanID               string
+	AccountID            string
+	AttestedAt           time.Time
+	ReceivedAt           time.Time
 
 	ScopeVerified bool
 	ScopeWarning  *string
@@ -101,10 +107,16 @@ type Verdict struct {
 // server's own verification outcome). ShareToken, ID, ReceivedAt, and
 // CreatedAt are assigned inside CreateVerdict, not supplied here.
 type NewVerdict struct {
-	ScannerVersion string
-	ScanID         string
-	AccountID      string
-	AttestedAt     time.Time
+	ScannerVersion       string
+	OrganizationVerified bool
+	OrgID                *string
+	NoOrganization       bool
+	OrganizationWarning  *string
+	AccountsListed       []string
+	AccountsScanned      []string
+	ScanID               string
+	AccountID            string
+	AttestedAt           time.Time
 
 	ScopeVerified bool
 	ScopeWarning  *string
@@ -151,21 +163,30 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 	var v Verdict
 	err = tx.QueryRow(ctx, `
 		INSERT INTO verdicts (
-			share_token, scanner_version, scan_id, account_id, attested_at,
+			share_token, scanner_version,
+			organization_verified, org_id, no_organization, organization_warning,
+			accounts_listed, accounts_scanned,
+			scan_id, account_id, attested_at,
 			scope_verified, scope_warning, time_verified, time_warning,
 			requested_regions, scanned_regions, regions_warning,
 			results_sha384, checks,
 			attestation_format, attestation_mock, pcrs, attestation_raw
 		) VALUES (
-			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9,
-			$10, $11, $12,
-			$13, $14,
-			$15, $16, $17, $18
+			$1, $2,
+			$3, $4, $5, $6,
+			$7, $8,
+			$9, $10, $11,
+			$12, $13, $14, $15,
+			$16, $17, $18,
+			$19, $20,
+			$21, $22, $23, $24
 		)
 		RETURNING id, received_at
 	`,
-		token, nv.ScannerVersion, nv.ScanID, nv.AccountID, nv.AttestedAt,
+		token, nv.ScannerVersion,
+		nv.OrganizationVerified, nv.OrgID, nv.NoOrganization, nv.OrganizationWarning,
+		nv.AccountsListed, nv.AccountsScanned,
+		nv.ScanID, nv.AccountID, nv.AttestedAt,
 		nv.ScopeVerified, nv.ScopeWarning, nv.TimeVerified, nv.TimeWarning,
 		nv.RequestedRegions, nv.ScannedRegions, nv.RegionsWarning,
 		nv.ResultsSHA384, nv.Checks,
@@ -184,6 +205,12 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 
 	v.ShareToken = token
 	v.ScannerVersion = nv.ScannerVersion
+	v.OrganizationVerified = nv.OrganizationVerified
+	v.OrgID = nv.OrgID
+	v.NoOrganization = nv.NoOrganization
+	v.OrganizationWarning = nv.OrganizationWarning
+	v.AccountsListed = nv.AccountsListed
+	v.AccountsScanned = nv.AccountsScanned
 	v.ScanID = nv.ScanID
 	v.AccountID = nv.AccountID
 	v.AttestedAt = nv.AttestedAt
@@ -228,7 +255,10 @@ func (s *Store) ShareLinkStatus(ctx context.Context, token string) (exists, revo
 // expects — kept as one named list so the two stay in sync by
 // construction instead of by two people remembering to update both.
 const verdictColumns = `
-	id, share_token, COALESCE(scanner_version, ''), scan_id, account_id, attested_at, received_at,
+	id, share_token, COALESCE(scanner_version, ''),
+	COALESCE(organization_verified, false), org_id, COALESCE(no_organization, false), organization_warning,
+	COALESCE(accounts_listed, ARRAY[]::text[]), COALESCE(accounts_scanned, ARRAY[]::text[]),
+	scan_id, account_id, attested_at, received_at,
 	scope_verified, scope_warning, time_verified, time_warning,
 	requested_regions, scanned_regions, regions_warning,
 	results_sha384, checks, attestation_format, attestation_mock,
@@ -320,7 +350,10 @@ type scanner interface {
 func scanVerdict(row scanner) (Verdict, error) {
 	var v Verdict
 	err := row.Scan(
-		&v.ID, &v.ShareToken, &v.ScannerVersion, &v.ScanID, &v.AccountID, &v.AttestedAt, &v.ReceivedAt,
+		&v.ID, &v.ShareToken, &v.ScannerVersion,
+		&v.OrganizationVerified, &v.OrgID, &v.NoOrganization, &v.OrganizationWarning,
+		&v.AccountsListed, &v.AccountsScanned,
+		&v.ScanID, &v.AccountID, &v.AttestedAt, &v.ReceivedAt,
 		&v.ScopeVerified, &v.ScopeWarning, &v.TimeVerified, &v.TimeWarning,
 		&v.RequestedRegions, &v.ScannedRegions, &v.RegionsWarning,
 		&v.ResultsSHA384, &v.Checks, &v.AttestationFormat, &v.AttestationMock,

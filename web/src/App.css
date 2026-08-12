@@ -134,6 +134,19 @@ body {
   margin-top: 0.35rem;
 }
 
+.coverage-headline__ratio {
+  font-size: 3.5rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: 0.35rem;
+}
+
+.coverage-headline__ratio-sep {
+  color: var(--color-text-dim);
+  font-weight: 400;
+  margin: 0 0.15rem;
+}
+
 .coverage-headline__label {
   color: var(--color-text-dim);
   margin-top: 0.35rem;

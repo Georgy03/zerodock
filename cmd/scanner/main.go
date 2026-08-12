@@ -24,6 +24,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -213,37 +214,91 @@ func run(mockAttest bool, requestedRegions []string) error {
 			Checks:           make(map[string]report.CheckOutput, len(checks.All)),
 		},
 	}
+	managementAccountID := ""
 	if identityErr == nil {
-		rep.AccountID = awsToString(identity.Account)
+		managementAccountID = awsToString(identity.Account)
+		rep.AccountID = managementAccountID
 		rep.ScopeVerified = true
 	} else {
 		rep.ScopeVerified = false
 		rep.ScopeWarning = fmt.Sprintf("could not confirm which AWS account this scan covers: %s", identityErr)
 	}
 
-	// This is the heart of the program: loop over every check that
-	// registered itself (see checks.All in internal/checks/types.go),
-	// run it, and store its result. Because every check follows the
-	// exact same Check/Result shape, this loop works no matter how many
-	// checks exist or what each one individually does. now is threaded
-	// through here rather than left for each check to determine itself —
-	// see the comment on Check.Run in internal/checks/types.go.
-	for _, check := range checks.All {
-		result, err := check.Run(ctx, cfg, now)
+	// Discover the complete AWS Organizations boundary before scanning any
+	// account. A genuine no-organization response is a verified single-account
+	// scope. Any other enumeration failure remains explicit and attested; it
+	// must never be collapsed into "there was only one account".
+	accountIDs := []string{"unknown"}
+	if managementAccountID == "" {
+		rep.OrganizationWarning = "could not enumerate AWS Organizations without a verified management account ID"
+	} else {
+		orgScope, err := providers.EnumerateOrganization(ctx, cfg, managementAccountID)
 		if err != nil {
-			// In normal operation, a check reports problems through
-			// Result.Status ("error"), not by returning a Go error —
-			// but just in case a check is buggy and returns one
-			// anyway, we still record something useful instead of
-			// crashing or silently dropping that check from the
-			// report.
-			result = checks.Result{Status: checks.StatusError, Findings: []string{err.Error()}}
+			rep.OrganizationWarning = fmt.Sprintf("could not enumerate AWS Organizations: %s", err)
+			accountIDs = []string{managementAccountID}
+		} else {
+			rep.OrganizationVerified = true
+			rep.OrgID = orgScope.OrganizationID
+			rep.NoOrganization = orgScope.NoOrganization
+			rep.AccountsListed = append([]string(nil), orgScope.Accounts...)
+			accountIDs = append([]string(nil), orgScope.Accounts...)
 		}
+	}
+
+	// Allocate every control once. Each account run is retained under
+	// Accounts, then aggregateAccountResults produces the backwards-compatible
+	// top-level Result used by the existing buyer page and API summaries.
+	for _, check := range checks.All {
 		rep.Checks[check.ID] = report.CheckOutput{
-			Title:  check.Title,
-			Tier:   check.Tier,
-			Result: result,
+			Title:    check.Title,
+			Tier:     check.Tier,
+			Accounts: make(map[string]checks.Result, len(accountIDs)),
 		}
+	}
+
+	// Scan the management account with the original credentials. Every other
+	// listed account must be entered through the dedicated read-only role.
+	for _, accountID := range accountIDs {
+		accountCfg := cfg
+		if managementAccountID != "" && accountID != managementAccountID {
+			var err error
+			accountCfg, err = providers.AssumeMemberRole(ctx, cfg, accountID)
+			if err != nil {
+				message := fmt.Sprintf("account %s was listed but not scanned: %s", accountID, err)
+				rep.OrganizationWarning = appendWarning(rep.OrganizationWarning, message)
+				for _, check := range checks.All {
+					output := rep.Checks[check.ID]
+					output.Accounts[accountID] = checks.Result{
+						Status:   checks.StatusError,
+						Findings: []string{message},
+					}
+					rep.Checks[check.ID] = output
+				}
+				continue
+			}
+		}
+
+		if accountID != "unknown" {
+			rep.AccountsScanned = append(rep.AccountsScanned, accountID)
+		}
+		for _, check := range checks.All {
+			result, err := check.Run(ctx, accountCfg, now)
+			if err != nil {
+				// A buggy check returning an error still becomes an explicit
+				// account result; it can never disappear from the aggregate.
+				result = checks.Result{Status: checks.StatusError, Findings: []string{err.Error()}}
+			}
+			output := rep.Checks[check.ID]
+			output.Accounts[accountID] = result
+			rep.Checks[check.ID] = output
+		}
+	}
+
+	sort.Strings(rep.AccountsScanned)
+	for _, check := range checks.All {
+		output := rep.Checks[check.ID]
+		output.Result = aggregateAccountResults(output.Accounts)
+		rep.Checks[check.ID] = output
 	}
 
 	// Turn the attested claim (which account, whether we could even
@@ -320,6 +375,43 @@ func run(mockAttest bool, requestedRegions []string) error {
 	}
 
 	return nil
+}
+
+// aggregateAccountResults folds account-specific evidence into the existing
+// control summary. Error outranks fail, which outranks pass; counts are summed;
+// and every finding is prefixed with its account so an organization-wide
+// result can never make ownership ambiguous.
+func aggregateAccountResults(accountResults map[string]checks.Result) checks.Result {
+	accountIDs := make([]string, 0, len(accountResults))
+	for accountID := range accountResults {
+		accountIDs = append(accountIDs, accountID)
+	}
+	sort.Strings(accountIDs)
+
+	aggregated := checks.Result{Status: checks.StatusPass}
+	for _, accountID := range accountIDs {
+		result := accountResults[accountID]
+		aggregated.Count += result.Count
+		for _, finding := range result.Findings {
+			aggregated.Findings = append(aggregated.Findings, fmt.Sprintf("account %s: %s", accountID, finding))
+		}
+		switch result.Status {
+		case checks.StatusError:
+			aggregated.Status = checks.StatusError
+		case checks.StatusFail:
+			if aggregated.Status != checks.StatusError {
+				aggregated.Status = checks.StatusFail
+			}
+		}
+	}
+	return aggregated
+}
+
+func appendWarning(existing, next string) string {
+	if existing == "" {
+		return next
+	}
+	return existing + "; " + next
 }
 
 // reportDeliveryAttempts and reportDeliveryBackoff control how hard

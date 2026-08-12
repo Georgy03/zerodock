@@ -46,6 +46,12 @@ CREATE TABLE IF NOT EXISTS verdicts (
     id                  BIGSERIAL PRIMARY KEY,
     share_token         TEXT NOT NULL REFERENCES share_links(token),
     scanner_version     TEXT NOT NULL,
+    organization_verified BOOLEAN NOT NULL,
+    org_id              TEXT,
+    no_organization     BOOLEAN NOT NULL,
+    organization_warning TEXT,
+    accounts_listed     TEXT[] NOT NULL,
+    accounts_scanned    TEXT[] NOT NULL,
 
     -- scan_id is the enclave-generated ID from the report itself (see
     -- newScanID in cmd/scanner/main.go) — UNIQUE here means submitting

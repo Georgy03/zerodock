@@ -46,6 +46,10 @@ const (
 	// "region-specific" like the others is itself the bug.
 	portIAMGlobal = 8111
 
+	// AWS Organizations is also global, but its single commercial-partition
+	// endpoint is hosted in us-east-1.
+	portOrganizationsGlobal = 8112
+
 	// VsockPortCredentials is the dedicated port the enclave connects to
 	// ONCE at startup to receive its temporary AWS credentials from the
 	// parent — see credentials.go. It's deliberately outside the 810x
@@ -92,4 +96,6 @@ var hostnameToVsockPort = map[string]uint32{
 
 	// One entry, not two — see the comment on portIAMGlobal above.
 	"iam.amazonaws.com": portIAMGlobal,
+
+	"organizations.us-east-1.amazonaws.com": portOrganizationsGlobal,
 }

@@ -47,20 +47,24 @@ func testStore(t *testing.T) *Store {
 
 func sampleVerdict(scanID, accountID string) NewVerdict {
 	return NewVerdict{
-		ScannerVersion:    "v1.2.3",
-		ScanID:            scanID,
-		AccountID:         accountID,
-		AttestedAt:        time.Now().UTC().Truncate(time.Millisecond),
-		ScopeVerified:     true,
-		TimeVerified:      true,
-		RequestedRegions:  []string{"us-east-1"},
-		ScannedRegions:    []string{"us-east-1"},
-		ResultsSHA384:     "deadbeef",
-		Checks:            json.RawMessage(`{}`),
-		AttestationFormat: "COSE_Sign1/ES384 (mock attester)",
-		AttestationMock:   true,
-		PCRs:              json.RawMessage(`{"0":"aa","1":"bb","2":"cc"}`),
-		AttestationRaw:    []byte{0x01, 0x02, 0x03},
+		ScannerVersion:       "v1.2.3",
+		OrganizationVerified: true,
+		NoOrganization:       true,
+		AccountsListed:       []string{accountID},
+		AccountsScanned:      []string{accountID},
+		ScanID:               scanID,
+		AccountID:            accountID,
+		AttestedAt:           time.Now().UTC().Truncate(time.Millisecond),
+		ScopeVerified:        true,
+		TimeVerified:         true,
+		RequestedRegions:     []string{"us-east-1"},
+		ScannedRegions:       []string{"us-east-1"},
+		ResultsSHA384:        "deadbeef",
+		Checks:               json.RawMessage(`{}`),
+		AttestationFormat:    "COSE_Sign1/ES384 (mock attester)",
+		AttestationMock:      true,
+		PCRs:                 json.RawMessage(`{"0":"aa","1":"bb","2":"cc"}`),
+		AttestationRaw:       []byte{0x01, 0x02, 0x03},
 	}
 }
 

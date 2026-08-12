@@ -18,6 +18,10 @@ afterEach(() => {
 function sampleContent(): AttestedContent {
   return {
     scanner_version: "v1.2.3",
+    organization_verified: true,
+    no_organization: true,
+    accounts_listed: ["123456789012"],
+    accounts_scanned: ["123456789012"],
     account_id: "123456789012",
     scope_verified: true,
     time_verified: true,

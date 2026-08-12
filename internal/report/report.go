@@ -26,9 +26,10 @@ import (
 // definition in cmd/scanner for the reasoning; it's unchanged here, just
 // relocated so internal/api can decode the identical shape.
 type CheckOutput struct {
-	Title  string        `json:"title"`
-	Tier   checks.Tier   `json:"tier"`
-	Result checks.Result `json:"result"`
+	Title    string                   `json:"title"`
+	Tier     checks.Tier              `json:"tier"`
+	Result   checks.Result            `json:"result"`
+	Accounts map[string]checks.Result `json:"accounts,omitempty"`
 }
 
 // AttestedContent is what actually gets hashed and sealed inside the
@@ -50,16 +51,22 @@ type AttestedContent struct {
 	// ScannerVersion is the immutable Git tag whose pcrs.json describes
 	// this binary. Omitempty preserves verification of reports issued before
 	// this field existed; current scanners always set it.
-	ScannerVersion   string                 `json:"scanner_version,omitempty"`
-	AccountID        string                 `json:"account_id"`
-	ScopeVerified    bool                   `json:"scope_verified"`
-	ScopeWarning     string                 `json:"scope_warning,omitempty"`
-	TimeVerified     bool                   `json:"time_verified"`
-	TimeWarning      string                 `json:"time_warning,omitempty"`
-	RequestedRegions []string               `json:"requested_regions"`
-	ScannedRegions   []string               `json:"scanned_regions"`
-	RegionsWarning   string                 `json:"regions_warning,omitempty"`
-	Checks           map[string]CheckOutput `json:"checks"`
+	ScannerVersion       string                 `json:"scanner_version,omitempty"`
+	OrganizationVerified bool                   `json:"organization_verified,omitempty"`
+	OrgID                string                 `json:"org_id,omitempty"`
+	NoOrganization       bool                   `json:"no_organization,omitempty"`
+	OrganizationWarning  string                 `json:"organization_warning,omitempty"`
+	AccountsListed       []string               `json:"accounts_listed,omitempty"`
+	AccountsScanned      []string               `json:"accounts_scanned,omitempty"`
+	AccountID            string                 `json:"account_id"`
+	ScopeVerified        bool                   `json:"scope_verified"`
+	ScopeWarning         string                 `json:"scope_warning,omitempty"`
+	TimeVerified         bool                   `json:"time_verified"`
+	TimeWarning          string                 `json:"time_warning,omitempty"`
+	RequestedRegions     []string               `json:"requested_regions"`
+	ScannedRegions       []string               `json:"scanned_regions"`
+	RegionsWarning       string                 `json:"regions_warning,omitempty"`
+	Checks               map[string]CheckOutput `json:"checks"`
 }
 
 // AttestationOutput is the small chunk of a report describing the signed

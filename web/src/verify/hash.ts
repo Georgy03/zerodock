@@ -88,6 +88,12 @@ function buildAttestedContentForHashing(resp: AttestedContent): Record<string, u
   // Go uses omitempty so legacy reports, issued before scanner_version was
   // added, retain their original byte-for-byte hash representation.
   if (resp.scanner_version) obj.scanner_version = resp.scanner_version;
+  if (resp.organization_verified) obj.organization_verified = resp.organization_verified;
+  if (resp.org_id) obj.org_id = resp.org_id;
+  if (resp.no_organization) obj.no_organization = resp.no_organization;
+  if (resp.organization_warning) obj.organization_warning = resp.organization_warning;
+  if (resp.accounts_listed && resp.accounts_listed.length > 0) obj.accounts_listed = resp.accounts_listed;
+  if (resp.accounts_scanned && resp.accounts_scanned.length > 0) obj.accounts_scanned = resp.accounts_scanned;
   obj.account_id = resp.account_id;
   obj.scope_verified = resp.scope_verified;
   if (resp.scope_warning) obj.scope_warning = resp.scope_warning;
@@ -104,11 +110,19 @@ function buildAttestedContentForHashing(resp: AttestedContent): Record<string, u
   // .sort() does for ASCII strings).
   for (const id of Object.keys(resp.checks).sort()) {
     const check = resp.checks[id];
-    checksObj[id] = {
+    const checkObj: Record<string, unknown> = {
       title: check.title,
       tier: check.tier,
       result: buildResultForHashing(check.result),
     };
+    if (check.accounts && Object.keys(check.accounts).length > 0) {
+      const accountResults: Record<string, unknown> = {};
+      for (const accountID of Object.keys(check.accounts).sort()) {
+        accountResults[accountID] = buildResultForHashing(check.accounts[accountID]);
+      }
+      checkObj.accounts = accountResults;
+    }
+    checksObj[id] = checkObj;
   }
   obj.checks = checksObj;
 
