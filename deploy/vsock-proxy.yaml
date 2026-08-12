@@ -1,0 +1,37 @@
+# Allowlist for the `vsock-proxy` tool (part of aws-nitro-enclaves-cli),
+# which runs on the PARENT EC2 instance — never inside the enclave itself.
+# Each vsock-proxy process only accepts connections destined for hosts
+# listed here; anything else is refused, so even if the enclave (or
+# something pretending to be it) tried to reach an unexpected host, the
+# proxy itself would block it. This is a second, independent safety net on
+# top of the enclave's own internal/transport/endpoints.go table.
+#
+# MUST STAY IN SYNC with internal/transport/endpoints.go and
+# start-proxies.sh — see the big comment at the top of endpoints.go for
+# why, and what breaks if these drift apart.
+#
+# One entry per hostname (not per port): every AWS API here is HTTPS, so
+# every entry is port 443.
+allowlist:
+  - {address: ec2.us-east-1.amazonaws.com, port: 443}
+  - {address: ec2.us-east-2.amazonaws.com, port: 443}
+
+  - {address: rds.us-east-1.amazonaws.com, port: 443}
+  - {address: rds.us-east-2.amazonaws.com, port: 443}
+
+  - {address: s3.us-east-1.amazonaws.com, port: 443}
+  - {address: s3.us-east-2.amazonaws.com, port: 443}
+
+  - {address: cloudtrail.us-east-1.amazonaws.com, port: 443}
+  - {address: cloudtrail.us-east-2.amazonaws.com, port: 443}
+
+  - {address: sts.us-east-1.amazonaws.com, port: 443}
+  - {address: sts.us-east-2.amazonaws.com, port: 443}
+
+  # IAM is a GLOBAL AWS service: one hostname for the whole account, not
+  # one per region. Do NOT add "iam.us-east-1.amazonaws.com" /
+  # "iam.us-east-2.amazonaws.com" entries — the AWS SDK never requests
+  # those, so they'd just be dead entries, and it's easy to mistakenly
+  # "complete the pattern" here and add them anyway. See the matching
+  # comment on portIAMGlobal in internal/transport/endpoints.go.
+  - {address: iam.amazonaws.com, port: 443}

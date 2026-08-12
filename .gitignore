@@ -1,0 +1,17 @@
+# Scan output — real scans contain account IDs, resource IDs, and IAM
+# usernames. Never commit one; this repo goes public before week 12.
+scan.json
+/report-*.json
+*.eif
+/reports/
+
+# Local build artifacts
+/build/
+
+# Byte-compiled Python (deploy/serve-credentials.py)
+__pycache__/
+*.pyc
+
+# Local environment config — contains DATABASE_URL (DB credentials).
+# .env.example is the template and IS committed.
+.env

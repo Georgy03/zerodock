@@ -1,0 +1,66 @@
+package transport
+
+import (
+	"crypto/x509"
+	_ "embed"
+	"fmt"
+)
+
+// The four files embedded below are the official Amazon Trust Services
+// root certificates, downloaded from https://www.amazontrust.com/repository/
+// (the same certificates every AWS SDK, browser, and OS trust store
+// already ships). They're the root of trust for every AWS API endpoint
+// this scanner talks to.
+//
+// go:embed compiles these PEM files directly INTO the binary at build
+// time — they become part of the program itself, not something read from
+// a file at runtime. That's the whole security property we're after: a
+// normal HTTP client on Linux trusts whatever certificates happen to be
+// sitting in /etc/ssl/certs/ on the machine it's running on, but our
+// `scratch` container image (see deploy/Dockerfile) doesn't even HAVE a
+// filesystem full of trusted certificates to read — and even if it did,
+// trusting "whatever's on disk" means trusting whoever last had write
+// access to that disk. By embedding the roots at compile time instead, the
+// trust anchors are fixed the moment the binary — and therefore PCR0 — is
+// built, and can't be swapped out afterward by modifying files on a
+// running system.
+//
+//go:embed rootcerts/AmazonRootCA1.pem
+var amazonRootCA1 []byte
+
+//go:embed rootcerts/AmazonRootCA2.pem
+var amazonRootCA2 []byte
+
+//go:embed rootcerts/AmazonRootCA3.pem
+var amazonRootCA3 []byte
+
+//go:embed rootcerts/AmazonRootCA4.pem
+var amazonRootCA4 []byte
+
+// NewRootCAPool builds a certificate pool containing ONLY the embedded
+// Amazon Trust Services roots above — nothing from the operating system,
+// nothing from any file on disk. Passing this pool as an *http.Client's
+// TLSClientConfig.RootCAs means that client will refuse to trust ANY
+// certificate that doesn't chain up to one of these four roots, which is
+// exactly right for a client that only ever talks to AWS.
+func NewRootCAPool() (*x509.CertPool, error) {
+	pool := x509.NewCertPool()
+
+	roots := map[string][]byte{
+		"AmazonRootCA1.pem": amazonRootCA1,
+		"AmazonRootCA2.pem": amazonRootCA2,
+		"AmazonRootCA3.pem": amazonRootCA3,
+		"AmazonRootCA4.pem": amazonRootCA4,
+	}
+	for name, pemBytes := range roots {
+		if !pool.AppendCertsFromPEM(pemBytes) {
+			// This should only happen if the embedded .pem file is
+			// missing, empty, or corrupted — i.e. a build-time mistake,
+			// not something that can happen at runtime from outside
+			// input.
+			return nil, fmt.Errorf("parse embedded root certificate %s: no valid certificate found", name)
+		}
+	}
+
+	return pool, nil
+}
