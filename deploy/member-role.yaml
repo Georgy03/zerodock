@@ -30,6 +30,10 @@ Resources:
               AWS: !Sub "arn:${AWS::Partition}:iam::${ScannerAccountId}:root"
             Action: sts:AssumeRole
       ManagedPolicyArns:
+        # SecurityAudit currently covers all scanner read calls across EC2,
+        # RDS, S3, CloudTrail, IAM, KMS, and GuardDuty. KMS key policies can
+        # independently deny GetKeyRotationStatus; that becomes an explicit
+        # check error. Only source-side sts:AssumeRole is added separately.
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/SecurityAudit"
 
 Outputs:

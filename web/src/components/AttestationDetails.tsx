@@ -8,7 +8,6 @@ export function AttestationDetails({ resp, result }: { resp: ShareResponse; resu
 
   return (
     <section className="attestation-details">
-      <h2>Attestation details</h2>
       <dl className="mono-fields">
         <dt>Format</dt>
         <dd>{resp.attestation.format}</dd>

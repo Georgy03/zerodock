@@ -46,6 +46,10 @@ ENDPOINTS=(
 	"8111:iam.amazonaws.com"
 	# Organizations is global but hosted at this us-east-1 endpoint.
 	"8112:organizations.us-east-1.amazonaws.com"
+	"8113:kms.us-east-1.amazonaws.com"
+	"8114:kms.us-east-2.amazonaws.com"
+	"8115:guardduty.us-east-1.amazonaws.com"
+	"8116:guardduty.us-east-2.amazonaws.com"
 )
 
 pids=()

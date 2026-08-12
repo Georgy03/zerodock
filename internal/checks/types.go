@@ -31,7 +31,7 @@ import (
 //     what's happening inside the resource itself (e.g. a self-hosted
 //     Postgres server's own disk encryption, which AWS can't see into).
 //
-// None of the 11 checks in this build are ActivelyProbed or InfraOnly —
+// None of the checks in this build are ActivelyProbed or InfraOnly —
 // everything here reads AWS-attested facts. Those tiers start being used
 // once self-hosted database checks are added later.
 type Tier string
@@ -44,7 +44,7 @@ const (
 
 // Result holds everything a single check found. Every check, no matter what
 // it inspects, always returns one of these — that consistency is what lets
-// cmd/scanner run all 11 checks the exact same way and combine their
+// cmd/scanner run every check the exact same way and combine their
 // answers into one report.
 type Result struct {
 	// Status is one of "pass" (no problems found), "fail" (problems
@@ -119,7 +119,7 @@ type Check struct {
 // file adds itself to this list automatically when the program starts (see
 // the Register function below and the init() function at the top of each
 // check's file). cmd/scanner then just loops over All and runs everything
-// in it — nobody has to remember to manually list all 11 checks anywhere.
+// in it — nobody has to remember to manually list every check anywhere.
 var All []Check
 
 // Register adds one check to the All list. Every check file calls this

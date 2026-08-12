@@ -1,6 +1,6 @@
 // Command api is the week-5 backend server: it exposes the three HTTP
-// endpoints defined in internal/api (POST /v1/verdicts, GET
-// /v1/share/{token}, and GET /v1/share/{token}/history), backed by
+// endpoints defined in internal/api (verdict ingest, share/history reads,
+// and questionnaire autofill), backed by
 // Postgres (internal/store) and server-side attestation verification
 // (internal/verify).
 //
@@ -16,13 +16,16 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/Georgy03/zerodock/internal/api"
+	"github.com/Georgy03/zerodock/internal/questionnaire"
 	"github.com/Georgy03/zerodock/internal/store"
 	"github.com/Georgy03/zerodock/internal/verify"
 )
@@ -60,7 +63,11 @@ func run() error {
 		log.Println("zerodock-api: WARNING — ZERODOCK_ALLOW_MOCK_ATTESTATION is enabled; this server will accept mock (non-hardware) attestations as valid verdicts")
 	}
 
-	srv := api.New(st, verify.Options{AllowMock: cfg.AllowMockAttestation}, cfg.PublicBaseURL)
+	questionnaireConfig, err := questionnaire.LoadConfig(cfg.QuestionnaireMappingsFile)
+	if err != nil {
+		return fmt.Errorf("load questionnaire mappings: %w", err)
+	}
+	srv := api.New(st, verify.Options{AllowMock: cfg.AllowMockAttestation}, cfg.PublicBaseURL, cfg.BuyerBaseURL, questionnaire.NewEngine(questionnaireConfig))
 
 	httpServer := &http.Server{
 		Addr:    cfg.ListenAddr,
@@ -120,10 +127,14 @@ type config struct {
 	// ListenAddr is the address net/http listens on, e.g. ":8080".
 	ListenAddr string
 
-	// PublicBaseURL is used only to build the share_url convenience
-	// field in POST /v1/verdicts responses. Optional — if unset,
-	// share_url is just the path, e.g. "/v1/share/abc123".
+	// PublicBaseURL builds share URLs returned by verdict ingest and written
+	// into questionnaire evidence cells. Optional — if unset, request host
+	// information is used for questionnaire evidence URLs.
 	PublicBaseURL string
+
+	// BuyerBaseURL is the public browser-verifier origin. Questionnaire
+	// evidence must point here, never at the private JSON API.
+	BuyerBaseURL string
 
 	// AllowMockAttestation controls whether this server accepts
 	// attestations that verify successfully but chain to a mock root
@@ -131,6 +142,10 @@ type config struct {
 	// and its big comment on what "mock" means here. This should be
 	// TRUE only in development/staging.
 	AllowMockAttestation bool
+
+	// QuestionnaireMappingsFile optionally replaces the embedded CAIQ/SOC 2
+	// mapping data and can contain per-account overrides.
+	QuestionnaireMappingsFile string
 }
 
 func loadConfig() (config, error) {
@@ -152,11 +167,24 @@ func loadConfig() (config, error) {
 		}
 		allowMock = parsed
 	}
+	buyerBaseURL := strings.TrimSpace(os.Getenv("BUYER_BASE_URL"))
+	if buyerBaseURL == "" {
+		return config{}, fmt.Errorf("BUYER_BASE_URL is required so questionnaire evidence links cannot silently point at the private API")
+	}
+	parsedBuyerURL, err := url.Parse(buyerBaseURL)
+	if err != nil || parsedBuyerURL.Scheme == "" || parsedBuyerURL.Host == "" {
+		return config{}, fmt.Errorf("BUYER_BASE_URL must be an absolute http(s) URL")
+	}
+	if parsedBuyerURL.Scheme != "http" && parsedBuyerURL.Scheme != "https" {
+		return config{}, fmt.Errorf("BUYER_BASE_URL must use http or https")
+	}
 
 	return config{
-		DatabaseURL:          dbURL,
-		ListenAddr:           listenAddr,
-		PublicBaseURL:        os.Getenv("PUBLIC_BASE_URL"),
-		AllowMockAttestation: allowMock,
+		DatabaseURL:               dbURL,
+		ListenAddr:                listenAddr,
+		PublicBaseURL:             os.Getenv("PUBLIC_BASE_URL"),
+		BuyerBaseURL:              strings.TrimRight(buyerBaseURL, "/"),
+		AllowMockAttestation:      allowMock,
+		QuestionnaireMappingsFile: os.Getenv("QUESTIONNAIRE_MAPPINGS_FILE"),
 	}, nil
 }

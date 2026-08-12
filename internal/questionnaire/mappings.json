@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "framework_version": "CAIQ v4.1.0",
+  "sources": {
+    "caiq": "https://cloudsecurityalliance.org/artifacts/star-level-1-security-questionnaire-caiq-v4/",
+    "ccm": "https://cloudsecurityalliance.org/artifacts/cloud-controls-matrix-v4"
+  },
+  "minutes_per_answer": 5,
+  "minutes_per_flag": 3,
+  "restricted_topics": {
+    "policy": ["policy", "policies", "procedure", "procedures"],
+    "human_resources": ["human resources", "employee", "personnel", "staff", "background check", "background checks", "security awareness", "staff training"],
+    "governance": ["governance", "board of directors", "risk committee", "executive oversight", "management oversight"],
+    "physical_security": ["physical security", "data center access", "facility access", "security guard", "visitor access", "surveillance camera"]
+  },
+  "technical_implementation_phrases": ["implemented", "implementation", "in effect", "enforced", "configured", "enabled", "operational", "applied", "deployed", "technical control", "technical controls"],
+  "evidence_gaps": [
+    {
+      "keyword_groups": [["mfa", "remote access"], ["multi-factor", "remote access"]],
+      "reason": "root-account MFA does not prove MFA is enforced for all remote access"
+    },
+    {
+      "keyword_groups": [["backup", "tested"], ["backups", "tested"], ["restore", "tested"], ["recovery", "tested"]],
+      "reason": "RDS backup retention does not prove backups or restores are tested"
+    }
+  ],
+  "mappings": [
+    {
+      "check_id": "aws.cloudtrail.multiregion",
+      "caiq_ids": ["LOG-03", "LOG-07", "LOG-09"],
+      "soc2_ids": ["CC7.2", "CC7.3"],
+      "keyword_groups": [["cloudtrail"], ["audit", "logging"], ["activity", "logs"], ["multi-region", "trail"]],
+      "verified_statement": "AWS API activity logging is enabled across the scanned regions"
+    },
+    {
+      "check_id": "aws.cloudtrail.log_encryption",
+      "caiq_ids": ["LOG-10", "CEK-03"],
+      "soc2_ids": ["CC6.1", "CC7.2", "C1.1"],
+      "keyword_groups": [["cloudtrail", "kms"], ["cloudtrail", "encrypted"], ["audit log", "encryption"], ["log bucket", "encryption"]],
+      "verified_statement": "CloudTrail trails use KMS and write to S3 buckets with default encryption"
+    },
+    {
+      "check_id": "aws.cloudtrail.log_validation",
+      "caiq_ids": ["LOG-02", "LOG-10"],
+      "soc2_ids": ["CC7.2", "CC7.3"],
+      "keyword_groups": [["cloudtrail", "log validation"], ["cloudtrail", "integrity validation"], ["audit log", "tamper"], ["log file validation"]],
+      "verified_statement": "CloudTrail log-file integrity validation is enabled"
+    },
+    {
+      "check_id": "aws.ebs.encryption",
+      "caiq_ids": ["CEK-03", "CEK-03.1"],
+      "soc2_ids": ["CC6.1", "C1.1"],
+      "keyword_groups": [["ebs", "encrypted"], ["block storage", "encryption"], ["volume", "encryption"], ["data at rest", "encrypted"], ["data encrypted at rest"], ["encrypted at rest"]],
+      "verified_statement": "EBS volumes are encrypted at rest"
+    },
+    {
+      "check_id": "aws.ebs.snapshot_encryption",
+      "caiq_ids": ["CEK-03", "BCR-08"],
+      "soc2_ids": ["CC6.1", "C1.1", "A1.2"],
+      "keyword_groups": [["ebs snapshot", "encrypted"], ["snapshot", "encryption"], ["backup", "encrypted at rest"]],
+      "verified_statement": "Account-owned EBS snapshots are encrypted at rest"
+    },
+    {
+      "check_id": "aws.ebs.default_encryption",
+      "caiq_ids": ["CEK-03"],
+      "soc2_ids": ["CC6.1", "C1.1"],
+      "keyword_groups": [["ebs", "encryption by default"], ["default", "volume encryption"], ["block storage", "default encryption"]],
+      "verified_statement": "EBS encryption by default is enabled in every scanned region"
+    },
+    {
+      "check_id": "aws.ec2.open_sg",
+      "caiq_ids": ["I&S-03", "I&S-09"],
+      "soc2_ids": ["CC6.6", "CC6.7"],
+      "keyword_groups": [["security group", "public"], ["firewall", "unrestricted"], ["network", "ingress"], ["internet", "port"]],
+      "verified_statement": "AWS security-group ingress is restricted from the public internet"
+    },
+    {
+      "check_id": "aws.iam.key_age",
+      "caiq_ids": ["IAM-14"],
+      "soc2_ids": ["CC6.2", "CC6.3"],
+      "keyword_groups": [["access key", "rotation"], ["access key", "age"], ["credential", "rotate"], ["stale", "credential"]],
+      "verified_statement": "IAM access keys are within the configured rotation age"
+    },
+    {
+      "check_id": "aws.iam.password_policy",
+      "caiq_ids": ["IAM-02", "IAM-14"],
+      "soc2_ids": ["CC6.1", "CC6.2"],
+      "keyword_groups": [["password policy"], ["password", "minimum length"], ["password", "14 characters"], ["credential", "password complexity"]],
+      "verified_statement": "The IAM account password policy requires at least 14 characters"
+    },
+    {
+      "check_id": "aws.iam.root_mfa",
+      "caiq_ids": ["IAM-13"],
+      "soc2_ids": ["CC6.1", "CC6.3"],
+      "keyword_groups": [["root", "mfa"], ["root account", "multi-factor"], ["privileged", "multi-factor"], ["administrator", "mfa"]],
+      "verified_statement": "MFA is enabled for the AWS root account"
+    },
+    {
+      "check_id": "aws.rds.backup_retention",
+      "caiq_ids": ["BCR-08", "BCR-08.1"],
+      "soc2_ids": ["A1.2", "A1.3"],
+      "keyword_groups": [["rds", "backup"], ["database", "backup retention"], ["database", "recovery"], ["backup", "retention"], ["database", "backups"], ["backups", "retained"], ["backups", "recoverable"]],
+      "verified_statement": "RDS automated backup retention meets the scanner threshold"
+    },
+    {
+      "check_id": "aws.rds.deletion_protection",
+      "caiq_ids": ["BCR-03"],
+      "soc2_ids": ["CC8.1", "A1.2"],
+      "keyword_groups": [["rds", "deletion protection"], ["database", "deletion protection"], ["accidental deletion", "database"]],
+      "verified_statement": "RDS deletion protection is enabled"
+    },
+    {
+      "check_id": "aws.rds.encryption",
+      "caiq_ids": ["CEK-03", "CEK-03.1"],
+      "soc2_ids": ["CC6.1", "C1.1"],
+      "keyword_groups": [["rds", "encrypted"], ["database", "encryption at rest"], ["database storage", "encrypted"], ["data at rest", "encrypted"], ["data encrypted at rest"], ["encrypted at rest"]],
+      "verified_statement": "RDS storage is encrypted at rest"
+    },
+    {
+      "check_id": "aws.rds.public_snapshots",
+      "caiq_ids": ["DSP-17", "I&S-03"],
+      "soc2_ids": ["CC6.6", "C1.1"],
+      "keyword_groups": [["rds", "public snapshot"], ["database snapshot", "public"], ["snapshot", "exposure"]],
+      "verified_statement": "RDS snapshots are not publicly accessible"
+    },
+    {
+      "check_id": "aws.rds.publicly_accessible",
+      "caiq_ids": ["I&S-03", "I&S-09"],
+      "soc2_ids": ["CC6.6", "CC6.7"],
+      "keyword_groups": [["rds", "publicly accessible"], ["database", "public internet"], ["database", "network access"]],
+      "verified_statement": "RDS instances are not publicly accessible"
+    },
+    {
+      "check_id": "aws.rds.tls_enforcement",
+      "caiq_ids": ["CEK-03"],
+      "soc2_ids": ["CC6.7", "C1.1"],
+      "keyword_groups": [["rds", "tls"], ["database", "tls"], ["database", "encrypted in transit"], ["data encrypted in transit"], ["encrypted in transit"], ["tls"]],
+      "verified_statement": "PostgreSQL and MySQL RDS parameter groups require encrypted TLS connections"
+    },
+    {
+      "check_id": "aws.s3.public",
+      "caiq_ids": ["DSP-17", "I&S-03"],
+      "soc2_ids": ["CC6.6", "C1.1"],
+      "keyword_groups": [["s3", "public"], ["bucket", "public access"], ["object storage", "public"], ["storage bucket", "exposure"]],
+      "verified_statement": "S3 buckets block public access"
+    },
+    {
+      "check_id": "aws.s3.versioning",
+      "caiq_ids": ["BCR-08"],
+      "soc2_ids": ["A1.2", "A1.3"],
+      "keyword_groups": [["s3", "versioning"], ["bucket", "versioning"], ["object storage", "version recovery"]],
+      "verified_statement": "S3 bucket versioning is enabled"
+    },
+    {
+      "check_id": "aws.s3.encryption",
+      "caiq_ids": ["CEK-03"],
+      "soc2_ids": ["CC6.1", "C1.1"],
+      "keyword_groups": [["s3", "default encryption"], ["s3", "encrypted at rest"], ["bucket", "default encryption"], ["object storage", "encrypted at rest"]],
+      "verified_statement": "S3 buckets have default encryption configured"
+    },
+    {
+      "check_id": "aws.kms.key_rotation",
+      "caiq_ids": ["CEK-12"],
+      "soc2_ids": ["CC6.1", "CC6.7", "C1.1"],
+      "keyword_groups": [["kms", "rotation"], ["encryption key", "rotation"], ["cryptographic key", "rotated"], ["key rotation"]],
+      "verified_statement": "Eligible customer-managed KMS keys have automatic rotation enabled"
+    },
+    {
+      "check_id": "aws.guardduty.enabled",
+      "caiq_ids": ["LOG-03", "LOG-05"],
+      "soc2_ids": ["CC7.2", "CC7.3"],
+      "keyword_groups": [["guardduty"], ["threat detection", "aws"], ["malicious activity", "detection"], ["cloud", "threat monitoring"]],
+      "verified_statement": "GuardDuty has an enabled detector in every scanned region"
+    }
+  ],
+  "account_overrides": {}
+}

@@ -1,0 +1,8 @@
+Control ID,Question,Answer,Evidence URL
+CEK-03.1,Is customer data encrypted at rest?,,
+DSP-17,Are cloud storage resources protected from public access?,,
+IAM-13,Is multi-factor authentication enabled for privileged cloud access?,,
+GRC-01.1,Does the board approve and review the information security policy?,,
+,Are database backups retained and recoverable?,,
+,Do you perform employee background checks?,,
+,Do you support customer-defined data residency?,,

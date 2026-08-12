@@ -26,8 +26,10 @@ package api
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 
+	"github.com/Georgy03/zerodock/internal/questionnaire"
 	"github.com/Georgy03/zerodock/internal/store"
 	"github.com/Georgy03/zerodock/internal/verify"
 )
@@ -57,11 +59,14 @@ type verdictStore interface {
 // Server holds everything the HTTP handlers need: the database (via
 // verdictStore), the verification policy (internal/verify.Options —
 // notably whether mock attestations are accepted at all), and the public
-// base URL used to build share links in POST responses.
+// base URL used to build share links in POST responses and questionnaire
+// evidence cells.
 type Server struct {
-	store      verdictStore
-	verifyOpts verify.Options
-	publicBase string
+	store          verdictStore
+	verifyOpts     verify.Options
+	publicBase     string
+	buyerBase      string
+	questionnaires *questionnaire.Engine
 
 	// verifyFn defaults to verify.Verify — swappable in tests so
 	// handler behavior can be exercised without needing a real signed
@@ -69,17 +74,23 @@ type Server struct {
 	verifyFn func(signedDoc []byte, opts verify.Options) (verify.Outcome, error)
 }
 
-// New builds a Server backed by a real *store.Store. publicBaseURL is
-// used only to construct the share_url convenience field in POST
-// /v1/verdicts responses (e.g. "https://verify.zerodock.example") —
-// trailing slashes are trimmed, so either form works.
-func New(st *store.Store, verifyOpts verify.Options, publicBaseURL string) *Server {
+// New builds a Server backed by a real *store.Store. publicBaseURL is the API
+// origin returned by verdict ingest; buyerBaseURL is the independent browser
+// verifier written into questionnaire evidence cells. Keeping them separate
+// prevents an exported questionnaire from linking a buyer to raw JSON.
+func New(st *store.Store, verifyOpts verify.Options, publicBaseURL, buyerBaseURL string, questionnaires *questionnaire.Engine) *Server {
 	return &Server{
-		store:      st,
-		verifyOpts: verifyOpts,
-		publicBase: strings.TrimRight(publicBaseURL, "/"),
-		verifyFn:   verify.Verify,
+		store:          st,
+		verifyOpts:     verifyOpts,
+		publicBase:     strings.TrimRight(publicBaseURL, "/"),
+		buyerBase:      strings.TrimRight(buyerBaseURL, "/"),
+		questionnaires: questionnaires,
+		verifyFn:       verify.Verify,
 	}
+}
+
+func (s *Server) buyerURL(token string) string {
+	return s.buyerBase + "/?token=" + url.QueryEscape(token)
 }
 
 // Routes builds the HTTP handler for this server. Kept separate from New
@@ -90,6 +101,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/verdicts", s.handleCreateVerdict)
 	mux.HandleFunc("GET /v1/share/{token}", s.handleLatest)
 	mux.HandleFunc("GET /v1/share/{token}/history", s.handleHistory)
+	mux.HandleFunc("POST /v1/share/{token}/questionnaires/autofill", s.handleQuestionnaireAutofill)
 	return mux
 }
 

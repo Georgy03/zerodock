@@ -1,6 +1,13 @@
 package transport
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"strconv"
+	"testing"
+)
 
 // TestEndpointTable_AllPortsUnique catches the easiest way this table
 // could break silently: two different hostnames accidentally sharing the
@@ -39,13 +46,57 @@ func TestEndpointTable_IAMIsGlobalNotRegional(t *testing.T) {
 // happens to run in the missing region, per the comment on
 // VsockDialer.DialContext.
 func TestEndpointTable_HasBothRegionsForRegionalServices(t *testing.T) {
-	regionalServices := []string{"ec2", "rds", "s3", "cloudtrail", "sts"}
+	regionalServices := []string{"ec2", "rds", "s3", "cloudtrail", "sts", "kms", "guardduty"}
 	for _, svc := range regionalServices {
 		for _, region := range []string{"us-east-1", "us-east-2"} {
 			host := svc + "." + region + ".amazonaws.com"
 			if _, ok := hostnameToVsockPort[host]; !ok {
 				t.Errorf("missing endpoint table entry for %q", host)
 			}
+		}
+	}
+}
+
+// TestEndpointConfigsStayInSync turns the three-way maintenance warning in
+// endpoints.go into an executable invariant. A new hostname or port must be
+// present in the enclave table, the parent allowlist, and the startup script.
+func TestEndpointConfigsStayInSync(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test path")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
+	yamlBytes, err := os.ReadFile(filepath.Join(repoRoot, "deploy", "vsock-proxy.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scriptBytes, err := os.ReadFile(filepath.Join(repoRoot, "deploy", "start-proxies.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	yamlHosts := make(map[string]bool)
+	for _, match := range regexp.MustCompile(`address:\s*([a-z0-9.-]+)`).FindAllStringSubmatch(string(yamlBytes), -1) {
+		yamlHosts[match[1]] = true
+	}
+	scriptEndpoints := make(map[string]uint32)
+	for _, match := range regexp.MustCompile(`"([0-9]+):([a-z0-9.-]+)"`).FindAllStringSubmatch(string(scriptBytes), -1) {
+		port, err := strconv.ParseUint(match[1], 10, 32)
+		if err != nil {
+			t.Fatalf("parse script port %q: %v", match[1], err)
+		}
+		scriptEndpoints[match[2]] = uint32(port)
+	}
+
+	if len(yamlHosts) != len(hostnameToVsockPort) || len(scriptEndpoints) != len(hostnameToVsockPort) {
+		t.Fatalf("endpoint count drift: Go=%d YAML=%d script=%d", len(hostnameToVsockPort), len(yamlHosts), len(scriptEndpoints))
+	}
+	for host, port := range hostnameToVsockPort {
+		if !yamlHosts[host] {
+			t.Errorf("%q is missing from deploy/vsock-proxy.yaml", host)
+		}
+		if scriptEndpoints[host] != port {
+			t.Errorf("start-proxies.sh maps %q to %d, want %d", host, scriptEndpoints[host], port)
 		}
 	}
 }

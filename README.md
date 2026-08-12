@@ -183,12 +183,29 @@ variables, shared config/credentials files, SSO, an assumed role, an
 instance/task role, etc.) — nothing AWS-specific needs to be passed on the
 command line.
 
-The scanning role needs read-only permissions for: EC2 (volumes, security
-groups, regions), RDS (instances, snapshots, snapshot attributes), S3
-(list buckets, get bucket location, public access block, bucket policy
-status), IAM (account summary, list users, list access keys), CloudTrail
-(describe trails, get trail status), and STS (get caller identity).
-`ReadOnlyAccess` or `SecurityAudit` cover all of it.
+The scanning role needs read-only security-metadata permissions for EC2, RDS,
+S3, IAM, CloudTrail, KMS, GuardDuty, and STS. AWS's current managed
+[`SecurityAudit`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/SecurityAudit.html)
+policy covers every check call, including:
+
+- `ec2:Describe*` and `ec2:GetEbsEncryptionByDefault` for volumes,
+  account-owned snapshots, security groups, regions, and encryption defaults;
+- `rds:Describe*` for instances, snapshots, and PostgreSQL/MySQL parameter
+  groups;
+- `s3:ListAllMyBuckets`, `s3:GetBucket*`, and
+  `s3:GetEncryptionConfiguration` for public access, versioning, default
+  encryption, and CloudTrail destination buckets;
+- `cloudtrail:DescribeTrails` and `cloudtrail:GetTrailStatus`;
+- `iam:Get*` and `iam:List*`, including the account password policy;
+- `kms:List*`, `kms:Describe*`, and `kms:Get*`, including key rotation status;
+- `guardduty:List*` and `guardduty:Get*` for detector state.
+
+No additional member-role IAM statement is required for these ten checks.
+Two existing management-plane exceptions remain: the scanner role needs the
+narrow `sts:AssumeRole` statement shown below, and the management account
+needs Organizations enumeration access. KMS also evaluates each key's key
+policy: a customer key that explicitly denies the audit role can still reject
+`kms:GetKeyRotationStatus`. ZeroDock reports that as `error`, never as a pass.
 
 ## Run
 
@@ -458,12 +475,84 @@ genuine), and serves them back out to buyers via a share link.
 - **`GET /v1/share/{token}/history`** — every verdict for that token, newest
   attested first (`?limit=` to cap the count; defaults and a hard ceiling
   are enforced server-side regardless). Same 404/410 rules as above.
+- **`POST /v1/share/{token}/questionnaires/autofill`** — accepts a multipart
+  upload named `questionnaire` (`.xlsx` or `.csv`). It uses the newest
+  attested verdict behind that token, returns the completed file in its
+  original format, and places the autofill report in
+  `X-ZeroDock-Autofill-Report` (base64url JSON), with
+  answered/partial/flagged/needs-human/hour totals repeated as simple headers.
+  Questionnaire bytes are never persisted.
 
 Both GET responses include the raw attestation, base64-encoded
 (`attestation.cose_sign1_base64`) — deliberately, not trimmed down to a
 summary: the whole point of attesting in the first place is that a buyer's
 own browser-side verifier can independently re-check it, not just trust
 this server's word that it verified.
+
+### Questionnaire autofill (weeks 9–10)
+
+The buyer page can now fill CAIQ v4.1 and bespoke spreadsheet questions from
+the latest verified verdict. The mapping catalog lives in
+`internal/questionnaire/mappings.json`, not Go code. Each scanner check maps
+to CAIQ control IDs, SOC 2 Trust Services Criteria IDs, and keyword groups.
+Operators can replace that file with `QUESTIONNAIRE_MAPPINGS_FILE`; its
+`account_overrides` object is keyed by AWS account ID and can replace or
+disable individual check mappings without rebuilding the service.
+
+Every supported row also receives a `ZeroDock Confidence` value: exact
+control-ID matches are `High`, unique keyword matches are `Medium`, and
+restricted/unmatched rows are explicitly `None`. Passing answers include the
+attested organization coverage ratio (for example, `2 of 2 listed AWS
+accounts`) so a partial scan can never read like full-account assurance.
+
+Matching is deliberately conservative:
+
+1. HR, governance, physical-security, and pure policy questions stay blank.
+   When one question asks both for policy/procedure documentation and whether
+   a mapped technical control is implemented, ZeroDock fills only the
+   technical half, labels the row `Partial`, and leaves the documentation
+   claim for a person.
+2. Exact CAIQ or SOC 2 control IDs take priority.
+3. Bespoke questions use deterministic keyword/phrase matching. Ambiguous and
+   unmatched rows stay blank for a human. Known unsafe near-matches carry a
+   specific evidence-gap reason—for example, root-account MFA does not prove
+   MFA for all remote access, backup retention does not prove restore testing,
+   and transport TLS used by the scanner does not prove a customer's workload
+   encrypts data in transit.
+4. Passing checks receive a dated “Yes” plus the share-link evidence URL.
+5. Failing checks receive `would answer No — <finding>, fix before submitting.`
+   Error results stay blank and are flagged; neither can become a false pass.
+6. Existing customer answers are preserved rather than overwritten.
+
+The response report counts `answered`, `partial`, `flagged`, and `needs_human`,
+and gives a rough hours-saved estimate with its assumptions. A small
+mixed-outcome demo file is available at
+`testdata/questionnaire-caiq-demo.csv`.
+
+CAIQ/CCM source links are recorded in the mapping file and point to the Cloud
+Security Alliance publications. SIG mappings are intentionally absent until
+Shared Assessments licensing is reviewed.
+
+Customer-authored XLSX files that use a SIG-Lite-like layout are supported as
+bespoke questionnaires: headers such as `Domain`, `Question`, `Response`, and
+`Notes / Evidence Required` are recognized, while cover, approval, scoring,
+and summary sheets remain untouched. This is format compatibility only.
+ZeroDock does not bundle, reproduce, or map Shared Assessments' licensed SIG
+question bank. Official SIG content requires a separate Shared Assessments
+product license before it can be incorporated into ZeroDock.
+
+Mapping coverage can be audited against a complete questionnaire without
+modifying it:
+
+```bash
+go run ./cmd/questionnaire-audit --input /path/to/CAIQv4.1.xlsx
+```
+
+Run the audit command above after changing the check catalog or mappings; the
+result is deliberately generated from the supplied workbook rather than kept
+as a hardcoded marketing percentage. The Introduction glossary is excluded.
+Audit dispositions describe matching potential only—they do not promise that
+a mapped check passes in the latest verdict.
 
 ### Server-side verification (`internal/verify`)
 
@@ -540,8 +629,10 @@ from that column, not a replacement for it.
 |---|---|---|
 | `DATABASE_URL` | yes | Postgres connection string, authenticating as `zerodock_app` |
 | `LISTEN_ADDR` | no (default `:8080`) | HTTP listen address |
-| `PUBLIC_BASE_URL` | no | Used only to build `share_url` in POST responses |
+| `PUBLIC_BASE_URL` | no | Builds the API share URL returned by verdict ingest |
+| `BUYER_BASE_URL` | yes | Public browser-verifier origin written into questionnaire evidence links |
 | `ZERODOCK_ALLOW_MOCK_ATTESTATION` | no (default `false`) | Accept verified-but-mock attestations |
+| `QUESTIONNAIRE_MAPPINGS_FILE` | no | Replace embedded questionnaire mappings, including per-account overrides |
 
 ```bash
 # apply the schema once, as a privileged/owner role
@@ -550,7 +641,9 @@ psql "$ADMIN_DATABASE_URL" -f migrations/0002_scanner_version.sql
 psql "$ADMIN_DATABASE_URL" -f migrations/0003_organization_scope.sql
 
 # run the server
-DATABASE_URL="postgres://zerodock_app:...@host:5432/zerodock" go run ./cmd/api
+DATABASE_URL="postgres://zerodock_app:...@host:5432/zerodock" \
+BUYER_BASE_URL="https://verify.zerodock.example" \
+go run ./cmd/api
 ```
 
 ## Tests

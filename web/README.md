@@ -77,6 +77,17 @@ cp .env.example .env   # point VITE_API_BASE_URL at your internal/api instance
 npm run dev
 ```
 
+With a verified share token open, the **Questionnaire autofill** section accepts
+`.xlsx` or `.csv` and downloads a filled copy. The browser sends the file only
+to the ZeroDock API behind that share link; the API processes it in memory and
+does not store the questionnaire. Use
+`../testdata/questionnaire-caiq-demo.csv` for a quick mixed pass/fail/human
+review demo.
+
+The API must be configured with `BUYER_BASE_URL` pointing at this browser UI.
+That URL—not the private `/v1/share/...` JSON endpoint—is what exported
+evidence cells contain.
+
 Open `http://localhost:5173/?token=YOUR_TOKEN` (or `/YOUR_TOKEN` — the
 last URL path segment works too if you don't want a query string).
 

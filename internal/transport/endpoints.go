@@ -51,6 +51,10 @@ const (
 	// AWS Organizations is also global, but its single commercial-partition
 	// endpoint is hosted in us-east-1.
 	portOrganizationsGlobal = 8112
+	portKMSUsEast1          = 8113
+	portKMSUsEast2          = 8114
+	portGuardDutyUsEast1    = 8115
+	portGuardDutyUsEast2    = 8116
 
 	// VsockPortCredentials is the dedicated port the enclave connects to
 	// ONCE at startup to receive its temporary AWS credentials from the
@@ -100,6 +104,12 @@ var hostnameToVsockPort = map[string]uint32{
 	"iam.amazonaws.com": portIAMGlobal,
 
 	"organizations.us-east-1.amazonaws.com": portOrganizationsGlobal,
+
+	"kms.us-east-1.amazonaws.com": portKMSUsEast1,
+	"kms.us-east-2.amazonaws.com": portKMSUsEast2,
+
+	"guardduty.us-east-1.amazonaws.com": portGuardDutyUsEast1,
+	"guardduty.us-east-2.amazonaws.com": portGuardDutyUsEast2,
 }
 
 // vsockPortForHostname resolves both ordinary AWS service endpoints and S3's

@@ -7,13 +7,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
 	"strconv"
 
+	"github.com/Georgy03/zerodock/internal/questionnaire"
 	"github.com/Georgy03/zerodock/internal/report"
 	"github.com/Georgy03/zerodock/internal/store"
 	"github.com/Georgy03/zerodock/internal/verify"
 )
+
+const maxQuestionnaireUploadBytes = 16 << 20 // 16 MiB
 
 // handleCreateVerdict implements POST /v1/verdicts. A submission is
 // accepted only if ALL of the following hold — any failure is a 4xx, and
@@ -264,6 +269,91 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		"token":    token,
 		"verdicts": views,
 	})
+}
+
+// handleQuestionnaireAutofill transforms one CSV/XLSX upload using the most
+// recent attested verdict behind the share token. Uploaded questionnaire data
+// is never persisted: it is read, transformed, returned, and then discarded.
+func (s *Server) handleQuestionnaireAutofill(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	if !s.resolveShareLink(w, r, token) {
+		return
+	}
+	if s.questionnaires == nil {
+		writeError(w, http.StatusServiceUnavailable, "questionnaire autofill is not configured")
+		return
+	}
+
+	v, err := s.store.LatestVerdict(r.Context(), token)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "this token exists but has no verdicts yet")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load latest verdict")
+		return
+	}
+	var verdictChecks map[string]report.CheckOutput
+	if err := json.Unmarshal(v.Checks, &verdictChecks); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to decode latest verdict checks")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxQuestionnaireUploadBytes+(1<<20))
+	if err := r.ParseMultipartForm(4 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid questionnaire upload: "+err.Error())
+		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+	file, header, err := r.FormFile("questionnaire")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "multipart field questionnaire is required")
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxQuestionnaireUploadBytes+1))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "read questionnaire upload: "+err.Error())
+		return
+	}
+	if len(data) > maxQuestionnaireUploadBytes {
+		writeError(w, http.StatusRequestEntityTooLarge, "questionnaire exceeds 16 MiB")
+		return
+	}
+
+	result, err := s.questionnaires.Autofill(questionnaire.AutofillInput{
+		Filename:        header.Filename,
+		Data:            data,
+		AccountID:       v.AccountID,
+		EvidenceURL:     s.buyerURL(token),
+		AttestedAt:      v.AttestedAt,
+		Checks:          verdictChecks,
+		AccountsListed:  v.AccountsListed,
+		AccountsScanned: v.AccountsScanned,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, questionnaire.ErrUnsupportedFormat), errors.Is(err, questionnaire.ErrNoQuestionTable):
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+		default:
+			writeError(w, http.StatusUnprocessableEntity, "could not autofill questionnaire: "+err.Error())
+		}
+		return
+	}
+
+	reportJSON, _ := json.Marshal(result.Report)
+	w.Header().Set("Content-Type", result.ContentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": result.Filename}))
+	w.Header().Set("X-ZeroDock-Autofill-Report", base64.RawURLEncoding.EncodeToString(reportJSON))
+	w.Header().Set("X-ZeroDock-Answered", strconv.Itoa(result.Report.Answered))
+	w.Header().Set("X-ZeroDock-Partial", strconv.Itoa(result.Report.Partial))
+	w.Header().Set("X-ZeroDock-Flagged", strconv.Itoa(result.Report.Flagged))
+	w.Header().Set("X-ZeroDock-Needs-Human", strconv.Itoa(result.Report.NeedsHuman))
+	w.Header().Set("X-ZeroDock-Hours-Saved", strconv.FormatFloat(result.Report.HoursSaved, 'f', 2, 64))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(result.Data)
 }
 
 // resolveShareLink is the shared "is this token even usable" check both

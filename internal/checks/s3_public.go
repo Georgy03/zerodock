@@ -189,7 +189,7 @@ func isNoSuchConfig(err error) bool {
 	var ae smithy.APIError
 	if errors.As(err, &ae) {
 		code := ae.ErrorCode()
-		return code == "NoSuchPublicAccessBlockConfiguration" || code == "NoSuchBucketPolicy" || code == "NoSuchLifecycleConfiguration"
+		return code == "NoSuchPublicAccessBlockConfiguration" || code == "NoSuchBucketPolicy" || code == "NoSuchLifecycleConfiguration" || code == "ServerSideEncryptionConfigurationNotFoundError"
 	}
 	return false
 }

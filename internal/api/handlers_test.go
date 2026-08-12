@@ -5,13 +5,17 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Georgy03/zerodock/internal/checks"
+	"github.com/Georgy03/zerodock/internal/questionnaire"
 	"github.com/Georgy03/zerodock/internal/report"
+	"github.com/Georgy03/zerodock/internal/store"
 	"github.com/Georgy03/zerodock/internal/verify"
 )
 
@@ -25,6 +29,7 @@ func newTestServer(fs *fakeStore, outcome verify.Outcome, verifyErr error) *Serv
 		store:      fs,
 		verifyOpts: verify.Options{AllowMock: true},
 		publicBase: "https://verify.example",
+		buyerBase:  "https://buyer.example",
 		verifyFn: func(_ []byte, _ verify.Options) (verify.Outcome, error) {
 			return outcome, verifyErr
 		},
@@ -488,5 +493,55 @@ func TestHandleLatest_StoreFailureIs500(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestHandleQuestionnaireAutofill_UsesLatestVerdictAndReturnsReport(t *testing.T) {
+	fs := newFakeStore()
+	checksJSON, err := json.Marshal(map[string]report.CheckOutput{
+		"aws.ebs.encryption": {Title: "EBS encryption", Result: checks.Result{Status: checks.StatusPass, Count: 2}},
+		"aws.rds.encryption": {Title: "RDS encryption", Result: checks.Result{Status: checks.StatusPass, Count: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs.addSubjectOnly("123456789012", "share-token")
+	fs.verdictsByToken["share-token"] = []store.Verdict{{
+		ShareToken: "share-token", AccountID: "123456789012", AttestedAt: time.Date(2026, 8, 12, 17, 54, 34, 0, time.UTC), Checks: checksJSON,
+	}}
+	cfg, err := questionnaire.LoadConfig("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newTestServer(fs, verify.Outcome{}, nil)
+	s.questionnaires = questionnaire.NewEngine(cfg)
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	part, err := mw.CreateFormFile("questionnaire", "caiq.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("Control ID,Question,Answer\nCEK-03.1,Is data encrypted at rest?,\n"))
+	_ = mw.Close()
+	req := httptest.NewRequest(http.MethodPost, "/v1/share/share-token/questionnaires/autofill", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("X-ZeroDock-Answered"); got != "1" {
+		t.Fatalf("answered header = %q", got)
+	}
+	if got := rec.Header().Get("X-ZeroDock-Partial"); got != "0" {
+		t.Fatalf("partial header = %q", got)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Disposition"), "caiq-zerodock-filled.csv") {
+		t.Fatalf("content disposition = %q", rec.Header().Get("Content-Disposition"))
+	}
+	if output := rec.Body.String(); !strings.Contains(output, "Yes — ") || !strings.Contains(output, "https://buyer.example/?token=share-token") || !strings.Contains(output, "High — exact control ID") {
+		t.Fatalf("autofilled CSV missing answer/evidence: %s", output)
 	}
 }

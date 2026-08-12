@@ -8,6 +8,7 @@ import { CoverageHeadline } from "./components/CoverageHeadline";
 import { ControlList } from "./components/ControlList";
 import { AttestationDetails } from "./components/AttestationDetails";
 import { VerificationPanel } from "./components/VerificationPanel";
+import { QuestionnaireAutofill } from "./components/QuestionnaireAutofill";
 
 /** Default freshness window: 30 days. Configurable via VITE_FRESHNESS_WINDOW_MS — see verify/freshness.ts. */
 const DEFAULT_FRESHNESS_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -66,9 +67,20 @@ function App() {
   return (
     <main className="page">
       <header className="page__header">
-        <span className="page__brand">ZeroDock</span>
-        <span className="page__tagline">Verified entirely in your browser — nothing here is taken on trust.</span>
+        <div className="brand-lockup">
+          <img className="brand-lockup__mark" src="/zerodock-mark.png" alt="" aria-hidden="true" />
+          <div className="brand-lockup__type">
+            <img className="brand-lockup__wordmark" src="/zerodock-wordmark.png" alt="ZeroDock" />
+            <span className="brand-lockup__promise">Zero knowledge. Verified trust.</span>
+          </div>
+        </div>
+        <div className="page__context">
+          <span className="page__context-kicker">Independent assurance</span>
+          <span className="page__context-copy">Cryptographically verified in this browser</span>
+        </div>
       </header>
+
+      <div className="page__brand-rule" aria-hidden><span>ZD / TRUST REPORT</span></div>
 
       {state.phase === "loading" && <div className="page__loading">Fetching and verifying…</div>}
 
@@ -86,13 +98,62 @@ function App() {
 
       {state.phase === "done" && (
         <>
-          <StatusBanner result={state.result} />
-          <CoverageHeadline resp={state.resp} verified={state.result.status === "verified"} />
-          <ControlList resp={state.resp} />
-          <VerificationPanel result={state.result} />
-          <AttestationDetails resp={state.resp} result={state.result} />
+          <section className="page__hero" aria-label="Trust and coverage summary">
+            <StatusBanner result={state.result} />
+            <CoverageHeadline resp={state.resp} verified={state.result.status === "verified"} />
+          </section>
+
+          <section className="page__section">
+            <div className="section-heading">
+              <div>
+                <span className="section-heading__index">01</span>
+                <h2>Cloud posture</h2>
+              </div>
+              <p>Provider-attested findings across every account in scope.</p>
+            </div>
+            <ControlList resp={state.resp} />
+          </section>
+
+          <section className="page__section page__section--questionnaire">
+            <div className="section-heading">
+              <div>
+                <span className="section-heading__index">02</span>
+                <h2>Questionnaire autofill</h2>
+              </div>
+              <p>Evidence-backed answers, with unsafe claims held for human review.</p>
+            </div>
+            <QuestionnaireAutofill token={tokenFromLocation() ?? ""} verified={state.result.status === "verified"} />
+          </section>
+
+          <section className="page__section">
+            <div className="section-heading">
+              <div>
+                <span className="section-heading__index">03</span>
+                <h2>Proof chain</h2>
+              </div>
+              <p>Six checks performed locally. The API cannot mark itself verified.</p>
+            </div>
+            <VerificationPanel result={state.result} />
+          </section>
+
+          <section className="page__section page__section--evidence">
+            <div className="section-heading">
+              <div>
+                <span className="section-heading__index">04</span>
+                <h2>Raw evidence</h2>
+              </div>
+              <p>Hardware identity, release measurement, and signed report fingerprint.</p>
+            </div>
+            <AttestationDetails resp={state.resp} result={state.result} />
+          </section>
         </>
       )}
+
+      <footer className="page__footer">
+        <img className="page__footer-mark" src="/zerodock-mark.png" alt="" aria-hidden="true" />
+        <span>Zero knowledge.</span>
+        <strong>Verified trust.</strong>
+      </footer>
     </main>
   );
 }
