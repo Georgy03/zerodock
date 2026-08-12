@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -266,21 +267,33 @@ func bedrockModelAccess(ctx context.Context, cfg aws.Config, _ time.Time) (Resul
 		// state. An AVAILABLE agreement normally means the account accepted a
 		// third-party Marketplace agreement (often on first invocation), but is
 		// still not proof that the model is currently used.
-		var agreements []string
+		agreements := make(map[string]string)
 		for _, model := range models.ModelSummaries {
 			availability, err := client.GetFoundationModelAvailability(ctx, &bedrock.GetFoundationModelAvailabilityInput{ModelId: model.ModelId})
 			if err != nil {
 				return nil, nil, len(agreements), fmt.Errorf("get availability for model %s: %w", aws.ToString(model.ModelId), err)
 			}
-			if hasActiveFoundationModelAgreement(availability.AgreementAvailability) {
-				agreements = append(agreements, fmt.Sprintf("%s: active agreement for %s (%s)", regionalCfg.Region, aws.ToString(model.ModelId), aws.ToString(model.ProviderName)))
+			provider := aws.ToString(model.ProviderName)
+			if hasAccountSpecificThirdPartyAgreement(provider, availability.AgreementAvailability) {
+				// The catalog can contain aliases for the same agreement. AWS returns
+				// the canonical model ID from the availability call, so key by that
+				// value instead of repeating every catalog alias.
+				modelID := aws.ToString(availability.ModelId)
+				if modelID == "" {
+					modelID = aws.ToString(model.ModelId)
+				}
+				agreements[modelID] = fmt.Sprintf("%s: active agreement for %s (%s)", regionalCfg.Region, modelID, provider)
 			}
 		}
-		sort.Strings(agreements)
-		if len(agreements) == 0 {
+		evidence := make([]string, 0, len(agreements))
+		for _, agreement := range agreements {
+			evidence = append(evidence, agreement)
+		}
+		sort.Strings(evidence)
+		if len(evidence) == 0 {
 			return nil, []string{fmt.Sprintf("%s: no active third-party Bedrock model agreements found; this does not rule out first-party or unlogged model calls", regionalCfg.Region)}, 0, nil
 		}
-		return nil, agreements, len(agreements), nil
+		return nil, evidence, len(evidence), nil
 	})
 	if err == nil && result.Status == StatusPass && result.Count == 0 {
 		result.Status = StatusNotInUse
@@ -288,8 +301,12 @@ func bedrockModelAccess(ctx context.Context, cfg aws.Config, _ time.Time) (Resul
 	return result, err
 }
 
-func hasActiveFoundationModelAgreement(agreement *bedrocktypes.AgreementAvailability) bool {
-	return agreement != nil && agreement.Status == bedrocktypes.AgreementStatusAvailable
+func hasAccountSpecificThirdPartyAgreement(provider string, agreement *bedrocktypes.AgreementAvailability) bool {
+	// Amazon models are first-party and enabled by default. Their API response
+	// can still say agreementAvailability=AVAILABLE, but that is not evidence
+	// that this account requested or accepted third-party model access.
+	return !strings.EqualFold(strings.TrimSpace(provider), "Amazon") &&
+		agreement != nil && agreement.Status == bedrocktypes.AgreementStatusAvailable
 }
 
 func bedrockCustomizationJobs(ctx context.Context, cfg aws.Config, _ time.Time) (Result, error) {

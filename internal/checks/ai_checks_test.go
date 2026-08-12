@@ -27,7 +27,7 @@ func TestBedrockLoggingEnabledRecognizesEveryPromptModality(t *testing.T) {
 }
 
 func TestActiveFoundationModelAgreementIsAccountSpecific(t *testing.T) {
-	if hasActiveFoundationModelAgreement(nil) {
+	if hasAccountSpecificThirdPartyAgreement("Anthropic", nil) {
 		t.Fatal("a catalog model without agreement data must not become account inventory")
 	}
 	for _, status := range []bedrocktypes.AgreementStatus{
@@ -35,12 +35,16 @@ func TestActiveFoundationModelAgreementIsAccountSpecific(t *testing.T) {
 		bedrocktypes.AgreementStatusNotAvailable,
 		bedrocktypes.AgreementStatusError,
 	} {
-		if hasActiveFoundationModelAgreement(&bedrocktypes.AgreementAvailability{Status: status}) {
+		if hasAccountSpecificThirdPartyAgreement("Anthropic", &bedrocktypes.AgreementAvailability{Status: status}) {
 			t.Fatalf("agreement status %s must not be reported as active", status)
 		}
 	}
-	if !hasActiveFoundationModelAgreement(&bedrocktypes.AgreementAvailability{Status: bedrocktypes.AgreementStatusAvailable}) {
+	available := &bedrocktypes.AgreementAvailability{Status: bedrocktypes.AgreementStatusAvailable}
+	if !hasAccountSpecificThirdPartyAgreement("Anthropic", available) {
 		t.Fatal("AVAILABLE agreement should be included in account inventory")
+	}
+	if hasAccountSpecificThirdPartyAgreement("Amazon", available) {
+		t.Fatal("first-party Amazon model availability must not be reported as a customer agreement")
 	}
 }
 
