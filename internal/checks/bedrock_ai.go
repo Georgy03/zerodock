@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -19,7 +18,7 @@ import (
 func init() {
 	Register(Check{ID: "aws.bedrock.invocation_logging", Title: "Bedrock model invocation logging and destination protection", Tier: ProviderAttested, Run: bedrockInvocationLogging})
 	Register(Check{ID: "aws.bedrock.guardrails", Title: "Bedrock guardrail readiness", Tier: ProviderAttested, Run: bedrockGuardrails})
-	Register(Check{ID: "aws.bedrock.model_access", Title: "Bedrock foundation-model access inventory", Tier: ProviderAttested, Run: bedrockModelAccess})
+	Register(Check{ID: "aws.bedrock.model_access", Title: "Bedrock third-party model agreement inventory", Tier: ProviderAttested, Run: bedrockModelAccess})
 	Register(Check{ID: "aws.bedrock.customization_jobs", Title: "Bedrock model customization and training-data inventory", Tier: ProviderAttested, Run: bedrockCustomizationJobs})
 }
 
@@ -261,37 +260,36 @@ func bedrockModelAccess(ctx context.Context, cfg aws.Config, _ time.Time) (Resul
 		if err != nil {
 			return nil, nil, 0, err
 		}
-		var enabled []string
+		// ListFoundationModels is only the catalog used to discover model IDs.
+		// It is not account-specific and must never be returned as inventory.
+		// GetFoundationModelAvailability adds the account-specific agreement
+		// state. An AVAILABLE agreement normally means the account accepted a
+		// third-party Marketplace agreement (often on first invocation), but is
+		// still not proof that the model is currently used.
+		var agreements []string
 		for _, model := range models.ModelSummaries {
 			availability, err := client.GetFoundationModelAvailability(ctx, &bedrock.GetFoundationModelAvailabilityInput{ModelId: model.ModelId})
 			if err != nil {
-				return nil, nil, len(models.ModelSummaries), fmt.Errorf("get availability for model %s: %w", aws.ToString(model.ModelId), err)
+				return nil, nil, len(agreements), fmt.Errorf("get availability for model %s: %w", aws.ToString(model.ModelId), err)
 			}
-			if availability.AuthorizationStatus == bedrocktypes.AuthorizationStatusAuthorized &&
-				availability.EntitlementAvailability == bedrocktypes.EntitlementAvailabilityAvailable &&
-				availability.RegionAvailability == bedrocktypes.RegionAvailabilityAvailable {
-				enabled = append(enabled, fmt.Sprintf("%s: %s (%s)", regionalCfg.Region, aws.ToString(model.ModelId), aws.ToString(model.ProviderName)))
+			if hasActiveFoundationModelAgreement(availability.AgreementAvailability) {
+				agreements = append(agreements, fmt.Sprintf("%s: active agreement for %s (%s)", regionalCfg.Region, aws.ToString(model.ModelId), aws.ToString(model.ProviderName)))
 			}
 		}
-		sort.Strings(enabled)
-		if len(enabled) == 0 {
-			return nil, []string{fmt.Sprintf("%s: no Bedrock foundation models are authorized and entitled", regionalCfg.Region)}, len(models.ModelSummaries), nil
+		sort.Strings(agreements)
+		if len(agreements) == 0 {
+			return nil, []string{fmt.Sprintf("%s: no active third-party Bedrock model agreements found; this does not rule out first-party or unlogged model calls", regionalCfg.Region)}, 0, nil
 		}
-		return nil, enabled, len(models.ModelSummaries), nil
+		return nil, agreements, len(agreements), nil
 	})
-	if err == nil && result.Status == StatusPass {
-		hasEnabledModel := false
-		for _, evidence := range result.Evidence {
-			if !strings.Contains(evidence, "no Bedrock foundation models") {
-				hasEnabledModel = true
-				break
-			}
-		}
-		if !hasEnabledModel {
-			result.Status = StatusNotInUse
-		}
+	if err == nil && result.Status == StatusPass && result.Count == 0 {
+		result.Status = StatusNotInUse
 	}
 	return result, err
+}
+
+func hasActiveFoundationModelAgreement(agreement *bedrocktypes.AgreementAvailability) bool {
+	return agreement != nil && agreement.Status == bedrocktypes.AgreementStatusAvailable
 }
 
 func bedrockCustomizationJobs(ctx context.Context, cfg aws.Config, _ time.Time) (Result, error) {
@@ -310,7 +308,7 @@ func bedrockCustomizationJobs(ctx context.Context, cfg aws.Config, _ time.Time) 
 				// in the region; it is a signed not-applicable fact, not a missing
 				// permission. Every other error remains an error.
 				if isAWSAPIErrorCode(err, "UnknownOperationException") {
-					return nil, []string{fmt.Sprintf("%s: Bedrock model customization jobs are not supported by this regional API", regionalCfg.Region)}, count, nil
+					return nil, []string{fmt.Sprintf("%s: skipped model customization inventory because this regional Bedrock API does not support it", regionalCfg.Region)}, count, nil
 				}
 				return nil, evidence, count, err
 			}

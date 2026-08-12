@@ -213,7 +213,7 @@ func TestDecision_AIInventoryKeywordsStayFactual(t *testing.T) {
 	}
 	engine := testEngine(t)
 	models := engine.Decide("123", "", "Which foundation models are enabled?", "https://verify.example/share/t", testTime, "2 of 2 listed AWS accounts", checksOut)
-	if models.Outcome != OutcomeAnswered || len(models.CheckIDs) != 1 || models.CheckIDs[0] != "aws.bedrock.model_access" || !strings.Contains(models.Answer, "availability is not proof of invocation") {
+	if models.Outcome != OutcomeAnswered || len(models.CheckIDs) != 1 || models.CheckIDs[0] != "aws.bedrock.model_access" || !strings.Contains(models.Answer, "agreement is not proof of invocation") {
 		t.Fatalf("model inventory decision = %#v", models)
 	}
 	training := engine.Decide("123", "", "Where is model training data stored?", "https://verify.example/share/t", testTime, "2 of 2 listed AWS accounts", checksOut)

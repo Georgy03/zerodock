@@ -27,6 +27,10 @@ export function ControlList({ resp }: { resp: ShareResponse }) {
       {entries.map(([id, check]) => {
         const accountResults = Object.values(check.accounts ?? {});
         const accountPasses = accountResults.filter((result) => result.status === "pass" || result.status === "not_in_use").length;
+        const isModelInventory = id === "aws.bedrock.model_access";
+        const notInUsePrefix = isModelInventory
+          ? "No active third-party model agreements · "
+          : "No applicable AI/ML resources observed · ";
         return (
         <li key={id} className={`control-item control-item--${check.result.status}`}>
           <div className="control-item__header">
@@ -44,7 +48,14 @@ export function ControlList({ resp }: { resp: ShareResponse }) {
               ))}
             </ul>
           )}
-          {check.result.evidence && check.result.evidence.length > 0 && (
+          {isModelInventory && check.result.evidence && check.result.evidence.length > 0 ? (
+            <details className="control-item__inventory">
+              <summary>Show model-access inventory ({check.result.evidence.length} evidence lines)</summary>
+              <ul className="control-item__evidence">
+                {check.result.evidence.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+            </details>
+          ) : check.result.evidence && check.result.evidence.length > 0 && (
             <ul className="control-item__evidence">
               {check.result.evidence.map((item, i) => (
                 <li key={i}>{item}</li>
@@ -52,8 +63,10 @@ export function ControlList({ resp }: { resp: ShareResponse }) {
             </ul>
           )}
           <div className="control-item__meta">
-            {check.result.status === "not_in_use" ? "No applicable AI/ML resources observed · " : ""}
-            {check.result.count} resource{check.result.count === 1 ? "" : "s"} examined
+            {check.result.status === "not_in_use" ? notInUsePrefix : ""}
+            {isModelInventory
+              ? `${check.result.count} active third-party model agreement${check.result.count === 1 ? "" : "s"}`
+              : `${check.result.count} resource${check.result.count === 1 ? "" : "s"} examined`}
             {check.result.region ? ` in ${check.result.region}` : ""}
             {accountResults.length > 0 ? ` · ${accountPasses}/${accountResults.length} accounts without findings` : ""}
           </div>

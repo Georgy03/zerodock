@@ -252,10 +252,11 @@ of SaaS AI products such as ChatGPT, Claude, or Gemini, browser extensions, or
 AI workloads in an unscanned account/provider.
 
 AI inventory uses a distinct `not_in_use` result when AWS proves that no
-applicable resource exists (for example, no SageMaker endpoints or no Bedrock
-customization jobs). Bedrock foundation-model availability is explicitly
-reported as availability, not usage: AWS can authorize serverless models
-without creating a persistent resource. If Bedrock invocation logging is
+applicable persistent resource exists (for example, no SageMaker endpoints or
+no Bedrock customization jobs). The model-access inventory contains only
+account-specific, active third-party Bedrock agreements. It never emits AWS's
+global model catalog, and an agreement is not proof of invocation. First-party
+models may not require an agreement at all. If Bedrock invocation logging is
 disabled, that check fails and says actual invocation cannot be ruled out.
 ZeroDock therefore never turns missing telemetry into a false estate-wide
 “no AI services in use” claim.

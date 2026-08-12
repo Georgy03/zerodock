@@ -200,7 +200,8 @@
       "soc2_ids": ["CC2.3", "CC9.2"],
       "iso_42001_ids": ["4.3", "8.1", "A.4", "A.10"],
       "keyword_groups": [["artificial intelligence", "model access"], ["machine learning", "model access"], ["large language model", "enabled"], ["large language models", "enabled"], ["large language model", "access"], ["large language models", "access"], ["llm", "enabled"], ["llm", "model access"], ["generative ai", "model access"], ["ai vendor", "model access"], ["foundation model", "enabled"], ["foundation models", "enabled"], ["foundation model", "access"], ["foundation models", "access"], ["which models"]],
-      "verified_statement": "The attested evidence inventories Bedrock foundation models that AWS reports as authorized and entitled; availability is not proof of invocation"
+      "verified_statement": "The attested evidence inventories active account-specific third-party Bedrock model agreements; an agreement is not proof of invocation",
+      "not_in_use_statement": "No active third-party Bedrock model agreements were found; first-party or unlogged model calls cannot be ruled out"
     },
     {
       "check_id": "aws.bedrock.customization_jobs",

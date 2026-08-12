@@ -9,6 +9,7 @@ import { ControlList } from "./components/ControlList";
 import { AttestationDetails } from "./components/AttestationDetails";
 import { VerificationPanel } from "./components/VerificationPanel";
 import { QuestionnaireAutofill } from "./components/QuestionnaireAutofill";
+import { AIPosture } from "./components/AIPosture";
 
 /** Default freshness window: 30 days. Configurable via VITE_FRESHNESS_WINDOW_MS — see verify/freshness.ts. */
 const DEFAULT_FRESHNESS_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -111,6 +112,7 @@ function App() {
               </div>
               <p>Provider-attested findings across every account in scope.</p>
             </div>
+            <AIPosture resp={state.resp} verified={state.result.status === "verified"} />
             <ControlList resp={state.resp} />
           </section>
 

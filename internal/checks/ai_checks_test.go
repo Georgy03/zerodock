@@ -26,6 +26,24 @@ func TestBedrockLoggingEnabledRecognizesEveryPromptModality(t *testing.T) {
 	}
 }
 
+func TestActiveFoundationModelAgreementIsAccountSpecific(t *testing.T) {
+	if hasActiveFoundationModelAgreement(nil) {
+		t.Fatal("a catalog model without agreement data must not become account inventory")
+	}
+	for _, status := range []bedrocktypes.AgreementStatus{
+		bedrocktypes.AgreementStatusPending,
+		bedrocktypes.AgreementStatusNotAvailable,
+		bedrocktypes.AgreementStatusError,
+	} {
+		if hasActiveFoundationModelAgreement(&bedrocktypes.AgreementAvailability{Status: status}) {
+			t.Fatalf("agreement status %s must not be reported as active", status)
+		}
+	}
+	if !hasActiveFoundationModelAgreement(&bedrocktypes.AgreementAvailability{Status: bedrocktypes.AgreementStatusAvailable}) {
+		t.Fatal("AVAILABLE agreement should be included in account inventory")
+	}
+}
+
 func TestUnknownOperationDetectionIsExact(t *testing.T) {
 	unknown := &smithy.GenericAPIError{Code: "UnknownOperationException", Message: "Unknown Operation"}
 	if !isAWSAPIErrorCode(unknown, "UnknownOperationException") {

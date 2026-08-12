@@ -458,6 +458,55 @@ select {
   margin-top: 0.3rem;
 }
 
+.control-item__inventory {
+  margin-top: 0.65rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.control-item__inventory summary {
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.ai-posture {
+  margin-bottom: 1rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid #4f86c6;
+  background: var(--paper-bright);
+  padding: 1.15rem 1.25rem;
+}
+
+.ai-posture--attention { border-left-color: var(--fail); }
+.ai-posture--incomplete { border-left-color: var(--error); }
+
+.ai-posture__kicker {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ai-posture h3 {
+  margin: 0.35rem 0 0.65rem;
+  font-size: clamp(1.15rem, 2.4vw, 1.65rem);
+}
+
+.ai-posture p {
+  margin: 0.35rem 0;
+  line-height: 1.5;
+}
+
+.ai-posture__caveat { font-weight: 720; }
+.ai-posture__inventory { color: var(--muted); font-size: 0.78rem; }
+
+.ai-posture small {
+  display: block;
+  margin-top: 0.75rem;
+  color: var(--muted);
+}
+
 .control-item__meta {
   margin-top: 0.8rem;
   color: var(--muted);
