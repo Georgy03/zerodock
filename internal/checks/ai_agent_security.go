@@ -435,7 +435,11 @@ func bedrockGuardrailEnforcement(ctx context.Context, cfg aws.Config, _ time.Tim
 func allowsBedrockInference(actions []string) bool {
 	for _, action := range actions {
 		action = strings.ToLower(action)
-		if action == "*" || action == "bedrock:*" || strings.HasPrefix(action, "bedrock:invokemodel") || strings.HasPrefix(action, "bedrock:converse") {
+		// Action "*" is a generic administrator grant. It can permit a
+		// future Bedrock invocation, but does not prove this role is an
+		// applicable Bedrock inference path. Requiring guardrails from that
+		// alone would turn every admin role into a misleading AI finding.
+		if action == "bedrock:*" || strings.HasPrefix(action, "bedrock:invokemodel") || strings.HasPrefix(action, "bedrock:converse") {
 			return true
 		}
 	}

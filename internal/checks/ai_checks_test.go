@@ -118,6 +118,15 @@ func TestGuardrailConditionDetection(t *testing.T) {
 	}
 }
 
+func TestGuardrailEnforcementOnlyUsesExplicitBedrockInferenceActions(t *testing.T) {
+	if allowsBedrockInference([]string{"*"}) {
+		t.Fatal("generic administrator action must not become a confirmed Bedrock inference path")
+	}
+	if !allowsBedrockInference([]string{"bedrock:InvokeModel"}) {
+		t.Fatal("explicit Bedrock inference action was not recognized")
+	}
+}
+
 func TestAIChecksAreRegisteredAsProviderAttested(t *testing.T) {
 	want := map[string]bool{
 		"aws.bedrock.invocation_logging":      false,
