@@ -89,16 +89,49 @@ func TestMarkNotInUseNeverHidesFailureOrError(t *testing.T) {
 	}
 }
 
+func TestPolicyPermissionLabelsDistinguishPrivilegeFromScope(t *testing.T) {
+	document := `{"Statement":[{"Effect":"Allow","Action":"s3:*","Resource":"*"},{"Effect":"Allow","Action":"s3:GetObject","Resource":"*"},{"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::acme-kb/*"}]}`
+	got := broadPolicyStatements(document)
+	want := map[string]bool{
+		"BROAD PRIVILEGE: s3:* on *":                     false,
+		"BROAD RESOURCE SCOPE: s3:getobject on *":        false,
+		"SCOPED: s3:getobject on arn:aws:s3:::acme-kb/*": false,
+	}
+	for _, label := range got {
+		if _, ok := want[label]; ok {
+			want[label] = true
+		}
+	}
+	for label, found := range want {
+		if !found {
+			t.Errorf("missing %q in %#v", label, got)
+		}
+	}
+}
+
+func TestGuardrailConditionDetection(t *testing.T) {
+	if !hasGuardrailCondition(map[string]any{"StringEquals": map[string]any{"bedrock:GuardrailIdentifier": "arn:aws:bedrock:..."}}) {
+		t.Fatal("guardrail condition was not recognized")
+	}
+	if hasGuardrailCondition(map[string]any{"StringEquals": map[string]any{"aws:PrincipalAccount": "123"}}) {
+		t.Fatal("unrelated condition was incorrectly recognized")
+	}
+}
+
 func TestAIChecksAreRegisteredAsProviderAttested(t *testing.T) {
 	want := map[string]bool{
-		"aws.bedrock.invocation_logging":    false,
-		"aws.bedrock.guardrails":            false,
-		"aws.bedrock.model_access":          false,
-		"aws.bedrock.customization_jobs":    false,
-		"aws.sagemaker.endpoint_encryption": false,
-		"aws.sagemaker.endpoint_network":    false,
-		"aws.sagemaker.notebook_internet":   false,
-		"aws.sagemaker.notebook_encryption": false,
+		"aws.bedrock.invocation_logging":      false,
+		"aws.bedrock.guardrails":              false,
+		"aws.bedrock.model_access":            false,
+		"aws.bedrock.customization_jobs":      false,
+		"aws.bedrock.agent_permissions":       false,
+		"aws.bedrock.knowledge_base_exposure": false,
+		"aws.bedrock.guardrail_enforcement":   false,
+		"aws.sagemaker.endpoint_encryption":   false,
+		"aws.sagemaker.endpoint_network":      false,
+		"aws.sagemaker.notebook_internet":     false,
+		"aws.sagemaker.notebook_encryption":   false,
+		"aws.sagemaker.network_isolation":     false,
 	}
 	for _, check := range All {
 		if _, ok := want[check.ID]; !ok {

@@ -59,6 +59,8 @@ ENDPOINTS=(
 	"8123:api.supabase.com"
 	"8124:secretsmanager.us-east-1.amazonaws.com"
 	"8125:secretsmanager.us-east-2.amazonaws.com"
+	"8126:bedrock-agent.us-east-1.amazonaws.com"
+	"8127:bedrock-agent.us-east-2.amazonaws.com"
 )
 
 pids=()

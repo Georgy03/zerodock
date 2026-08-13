@@ -16,6 +16,8 @@ github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.37 h1:oyd3ke4V9AhKcRR7rRgxk1VyI+D
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.37/go.mod h1:aA9D7SqfG9IC1b7FLD7Iyc8Q4JN0a8gHhNjN4zPlIaI=
 github.com/aws/aws-sdk-go-v2/service/bedrock v1.66.5 h1:QWbXQmzxD2xPtEjOJKiJqwejE/ZJchRW3Yw7/iUzZ7E=
 github.com/aws/aws-sdk-go-v2/service/bedrock v1.66.5/go.mod h1:kUa3owVjMvMgE0TGhfZQPQy9RMlKIhjm8eymrVfL1wM=
+github.com/aws/aws-sdk-go-v2/service/bedrockagent v1.58.5 h1:ex6zvvsUIeJvBmtYe2HQ2nFRz51TWyjEGIAyp2dIJs4=
+github.com/aws/aws-sdk-go-v2/service/bedrockagent v1.58.5/go.mod h1:O3EbI281Rhfb904DDIexzx5oRBasBNAlSc0xKpANIs4=
 github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.58.5 h1:IW3YOylp+V+c6xt8Lu+wEZu4TDL9yVNFgpwWrlON+yc=
 github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.58.5/go.mod h1:sIZpF3UTDuqWuVaav9CkiGN7XBv8N+bse0twkorKaqs=
 github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.82.1 h1:RZmoYM5aORy4KwkyoYDOTaYxE2ZJ28wYS5X/V3RUNfo=

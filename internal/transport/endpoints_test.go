@@ -47,7 +47,7 @@ func TestEndpointTable_IAMIsGlobalNotRegional(t *testing.T) {
 // happens to run in the missing region, per the comment on
 // VsockDialer.DialContext.
 func TestEndpointTable_HasBothRegionsForRegionalServices(t *testing.T) {
-	regionalServices := []string{"ec2", "rds", "s3", "cloudtrail", "sts", "kms", "guardduty", "bedrock", "secretsmanager"}
+	regionalServices := []string{"ec2", "rds", "s3", "cloudtrail", "sts", "kms", "guardduty", "bedrock", "bedrock-agent", "secretsmanager"}
 	for _, svc := range regionalServices {
 		for _, region := range []string{"us-east-1", "us-east-2"} {
 			host := svc + "." + region + ".amazonaws.com"

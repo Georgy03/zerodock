@@ -67,6 +67,8 @@ const (
 	portSupabaseManagement  = 8123
 	portSecretsManagerEast1 = 8124
 	portSecretsManagerEast2 = 8125
+	portBedrockAgentEast1 = 8126
+	portBedrockAgentEast2 = 8127
 
 	// VsockPortCredentials is the dedicated port the enclave connects to
 	// ONCE at startup to receive its temporary AWS credentials from the
@@ -134,6 +136,8 @@ var hostnameToVsockPort = map[string]uint32{
 	"logs.us-east-2.amazonaws.com": portCloudWatchLogsEast2,
 
 	"api.supabase.com": portSupabaseManagement,
+	"bedrock-agent.us-east-1.amazonaws.com": portBedrockAgentEast1,
+	"bedrock-agent.us-east-2.amazonaws.com": portBedrockAgentEast2,
 
 	// Vendor provider tokens remain in the vendor's own AWS Secrets Manager.
 	"secretsmanager.us-east-1.amazonaws.com": portSecretsManagerEast1,

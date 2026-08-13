@@ -4,6 +4,9 @@ const PERSISTENT_RESOURCE_CHECKS = [
   "aws.sagemaker.endpoint_encryption",
   "aws.sagemaker.notebook_encryption",
   "aws.bedrock.customization_jobs",
+  "aws.bedrock.agent_permissions",
+  "aws.bedrock.knowledge_base_exposure",
+  "aws.sagemaker.network_isolation",
 ] as const;
 
 function resultForAccounts(check: CheckOutput | undefined) {
@@ -17,6 +20,9 @@ export interface AIPostureSummary {
   resources: string;
   logging: string;
   agreements: string;
+  execute: string;
+  retrieve: string;
+  egress: string;
 }
 
 /**
@@ -27,10 +33,12 @@ export interface AIPostureSummary {
  */
 export function deriveAIPosture(resp: ShareResponse): AIPostureSummary {
   const scanned = Math.max(resp.accounts_scanned?.length ?? 0, 1);
+  // New controls are optional here so previously attested reports remain
+  // interpretable; absence means the scanner version predates the control,
+  // not that current inventory is necessarily incomplete.
   const persistent = PERSISTENT_RESOURCE_CHECKS.map((id) => resp.checks[id]).filter(Boolean) as CheckOutput[];
   const hasPersistentResources = persistent.some((check) => check.result.count > 0);
-  const inventoryIncomplete = persistent.length !== PERSISTENT_RESOURCE_CHECKS.length ||
-    persistent.some((check) => check.result.status === "error");
+  const inventoryIncomplete = persistent.some((check) => check.result.status === "error");
 
   let heading = "No persistent AI/ML resources observed";
   let tone: AIPostureSummary["tone"] = "clear";
@@ -80,5 +88,29 @@ export function deriveAIPosture(resp: ShareResponse): AIPostureSummary {
     ? "No active third-party Bedrock model agreements were found. Agreements are access inventory, not usage evidence."
     : `${agreementCount} active third-party Bedrock model agreement${agreementCount === 1 ? "" : "s"} found. Agreements are access inventory, not usage evidence.`;
 
-  return { heading, tone, resources: resourceParts.join(" "), logging, agreements };
+  const agents = resp.checks["aws.bedrock.agent_permissions"];
+  const knowledgeBases = resp.checks["aws.bedrock.knowledge_base_exposure"];
+  const isolation = resp.checks["aws.sagemaker.network_isolation"];
+  const noAgents = agents?.result.status === "not_in_use";
+  const noKnowledgeBases = knowledgeBases?.result.status === "not_in_use";
+  if ([agents, knowledgeBases, isolation].some((check) => check?.result.status === "error")) tone = "incomplete";
+  const agentFindings = agents?.result.findings ?? [];
+  const lambdaPaths = (agents?.result.evidence ?? []).filter((line) => line.includes("invokes Lambda")).length;
+  const broadAgentPermissions = agentFindings.filter((line) => line.includes("BROAD PRIVILEGE") || line.includes("BROAD RESOURCE SCOPE")).length;
+  const execute = noAgents
+    ? "No Bedrock agents configured."
+    : `${agents?.result.count ?? 0} Bedrock agent(s), ${broadAgentPermissions} broad permission finding(s), and ${lambdaPaths} Lambda action-group path(s). Details below name every role, permission, and Lambda target.`;
+
+  const knowledgeFindings = knowledgeBases?.result.findings ?? [];
+  const s3Sources = (knowledgeBases?.result.evidence ?? []).filter((line) => line.includes("retrieves from S3")).length;
+  const publicSources = knowledgeFindings.filter((line) => line.includes("HIGH: retrieves from publicly accessible S3 bucket")).length;
+  const retrieve = noKnowledgeBases
+    ? "No Bedrock knowledge bases configured."
+    : `${knowledgeBases?.result.count ?? 0} knowledge base(s), ${s3Sources} S3 data source(s), and ${publicSources} public source bucket(s). Details below show sources, execution-role scope, and vector-store visibility.`;
+
+  const egress = isolation?.result.status === "not_in_use"
+    ? "No SageMaker workloads requiring network-isolation review were observed."
+    : "SageMaker models, training jobs, processing jobs, and Studio domains are broken out below. Network isolation and VPC placement are separate evidence dimensions.";
+
+  return { heading, tone, resources: resourceParts.join(" "), logging, agreements, execute, retrieve, egress };
 }

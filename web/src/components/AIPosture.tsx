@@ -10,6 +10,12 @@ export function AIPosture({ resp, verified }: { resp: ShareResponse; verified: b
       <p>{summary.resources}</p>
       <p className="ai-posture__caveat">{summary.logging}</p>
       <p className="ai-posture__inventory">{summary.agreements}</p>
+      <h4>What can AI execute?</h4>
+      <p className="ai-posture__inventory">{summary.execute}</p>
+      <h4>What data can AI retrieve?</h4>
+      <p className="ai-posture__inventory">{summary.retrieve}</p>
+      <h4>Can AI workloads reach external networks?</h4>
+      <p className="ai-posture__inventory">{summary.egress}</p>
       <small>Covers AI services in the scanned AWS accounts, not employee use of SaaS AI tools.</small>
     </aside>
   );

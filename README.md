@@ -315,6 +315,24 @@ disabled, that check fails and says actual invocation cannot be ruled out.
 ZeroDock therefore never turns missing telemetry into a false estate-wide
 “no AI services in use” claim.
 
+For deployed Bedrock agents, ZeroDock records the execution role, attached
+guardrail, and every Lambda action-group target. Permission evidence labels
+`BROAD PRIVILEGE` (for example `s3:*`) separately from `BROAD RESOURCE SCOPE`
+(for example `s3:GetObject` on `*`) and `SCOPED` grants. Knowledge-base S3
+sources are independently checked for public access and default encryption;
+a public source is a high-severity finding. Vector-store posture is only
+claimed where AWS exposes it: third-party stores such as Pinecone are labelled
+`NOT PROVIDER-VERIFIABLE FROM AWS`, never assumed private.
+
+The guardrail-enforcement check examines IAM **Allow** statements permitting
+Bedrock inference and reports whether they require
+`bedrock:GuardrailIdentifier`. It is evidence about the policy statement, not
+a complete IAM authorization simulation: SCPs, resource policies, permissions
+boundaries, and explicit denies can further constrain the effective result.
+SageMaker network isolation is reported separately for models, training jobs,
+processing jobs, and Studio domains; VPC placement is deliberately not treated
+as equivalent to `EnableNetworkIsolation`.
+
 ### Organization-wide account coverage
 
 When run from the AWS Organizations management account, the scanner calls

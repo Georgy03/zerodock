@@ -240,6 +240,38 @@
       "not_in_use_statement": "No SageMaker notebook instances were found"
     },
     {
+      "check_id": "aws.bedrock.agent_permissions",
+      "caiq_ids": [],
+      "soc2_ids": ["CC6.1", "CC6.3", "CC6.6"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["ai agent permissions"], ["artificial intelligence", "permissions"], ["agent", "least privilege"], ["what can the model access"]],
+      "verified_statement": "Bedrock agent execution roles, attached guardrails, and action-group Lambda reach are inventoried from AWS"
+    },
+    {
+      "check_id": "aws.bedrock.knowledge_base_exposure",
+      "caiq_ids": [],
+      "soc2_ids": ["CC6.1", "CC6.6", "C1.1"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["model data access"], ["rag"], ["retrieval augmented generation"], ["knowledge base", "data source"], ["artificial intelligence", "data access"]],
+      "verified_statement": "Bedrock knowledge-base execution roles, vector stores, and configured data sources are inventoried from AWS"
+    },
+    {
+      "check_id": "aws.bedrock.guardrail_enforcement",
+      "caiq_ids": [],
+      "soc2_ids": ["CC6.1", "CC6.6"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["guardrail enforcement"], ["artificial intelligence", "guardrail"], ["large language model", "safety control"], ["model inference", "policy enforcement"]],
+      "verified_statement": "IAM policies allowing Bedrock inference require an identified guardrail"
+    },
+    {
+      "check_id": "aws.sagemaker.network_isolation",
+      "caiq_ids": [],
+      "soc2_ids": ["CC6.6", "CC6.7"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["network isolation"], ["can the model reach external networks"], ["artificial intelligence", "external network"], ["machine learning", "network isolation"]],
+      "verified_statement": "SageMaker models, training and processing jobs, and Studio domains are checked for network isolation"
+    },
+    {
       "check_id": "aws.sagemaker.notebook_encryption",
       "caiq_ids": ["CEK-03"],
       "soc2_ids": ["CC6.1", "C1.1"],
