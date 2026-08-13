@@ -8,7 +8,7 @@ import (
 
 // The roots embedded below are the explicit trust anchors for every HTTPS
 // provider endpoint ZeroDock calls: four Amazon Trust Services roots and the
-// Google Trust Services root currently used by Supabase. No system trust
+// Google Trust Services root used by Supabase and Google Cloud APIs. No system trust
 // store is consulted.
 //
 // go:embed compiles these PEM files directly INTO the binary at build
@@ -36,7 +36,7 @@ var amazonRootCA3 []byte
 //go:embed rootcerts/AmazonRootCA4.pem
 var amazonRootCA4 []byte
 
-// api.supabase.com currently chains through Google Trust Services. This is a
+// Google provider endpoints chain through Google Trust Services. This is a
 // deliberately embedded root, not a SystemCertPool fallback: the enclave
 // trusts the same fixed set of roots even when its scratch image has no OS
 // certificate store. Review this pin when Supabase changes its certificate
@@ -44,6 +44,13 @@ var amazonRootCA4 []byte
 //
 //go:embed rootcerts/GTSRootR4.pem
 var gtsRootR4 []byte
+
+// GCP control-plane endpoints may chain through GTS Root R1 rather than R4.
+// Both are explicit Google-owned trust anchors from pki.goog/repository; this
+// remains a pin, never a fallback to the operating system certificate store.
+//
+//go:embed rootcerts/GTSRootR1.pem
+var gtsRootR1 []byte
 
 // NewRootCAPool builds a certificate pool containing ONLY the embedded
 // Amazon Trust Services roots above — nothing from the operating system,
@@ -59,6 +66,7 @@ func NewRootCAPool() (*x509.CertPool, error) {
 		"AmazonRootCA3.pem": amazonRootCA3,
 		"AmazonRootCA4.pem": amazonRootCA4,
 		"GTSRootR4.pem":     gtsRootR4,
+		"GTSRootR1.pem":     gtsRootR1,
 	}
 	for name, pemBytes := range roots {
 		if !pool.AppendCertsFromPEM(pemBytes) {

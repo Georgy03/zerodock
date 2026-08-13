@@ -69,6 +69,14 @@ const (
 	portSecretsManagerEast2 = 8125
 	portBedrockAgentEast1 = 8126
 	portBedrockAgentEast2 = 8127
+	portGCPResourceManager = 8128
+	portGCPCompute         = 8129
+	portGCPStorage         = 8130
+	portGCPIAM             = 8131
+	portGCPSQLAdmin        = 8132
+	portGCPLogging         = 8133
+	portGCPKMS             = 8134
+	portGCPSTS             = 8135
 
 	// VsockPortCredentials is the dedicated port the enclave connects to
 	// ONCE at startup to receive its temporary AWS credentials from the
@@ -138,6 +146,18 @@ var hostnameToVsockPort = map[string]uint32{
 	"api.supabase.com": portSupabaseManagement,
 	"bedrock-agent.us-east-1.amazonaws.com": portBedrockAgentEast1,
 	"bedrock-agent.us-east-2.amazonaws.com": portBedrockAgentEast2,
+
+	// Google Cloud control-plane endpoints. They are deliberately fixed,
+	// public HTTPS destinations; TLS still terminates inside the enclave using
+	// the embedded Google Trust Services roots.
+	"cloudresourcemanager.googleapis.com": portGCPResourceManager,
+	"compute.googleapis.com":              portGCPCompute,
+	"storage.googleapis.com":              portGCPStorage,
+	"iam.googleapis.com":                  portGCPIAM,
+	"sqladmin.googleapis.com":             portGCPSQLAdmin,
+	"logging.googleapis.com":              portGCPLogging,
+	"cloudkms.googleapis.com":             portGCPKMS,
+	"sts.googleapis.com":                  portGCPSTS,
 
 	// Vendor provider tokens remain in the vendor's own AWS Secrets Manager.
 	"secretsmanager.us-east-1.amazonaws.com": portSecretsManagerEast1,

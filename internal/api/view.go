@@ -30,6 +30,9 @@ type verdictView struct {
 	SupabaseOrganizationID string    `json:"supabase_organization_id,omitempty"`
 	ProjectsListed         []string  `json:"projects_listed,omitempty"`
 	ProjectsScanned        []string  `json:"projects_scanned,omitempty"`
+	GCPOrganizationID      string    `json:"gcp_organization_id,omitempty"`
+	GCPProjectsListed      []string  `json:"gcp_projects_listed,omitempty"`
+	GCPProjectsScanned     []string  `json:"gcp_projects_scanned,omitempty"`
 	ScanID                 string    `json:"scan_id"`
 	AccountID              string    `json:"account_id"`
 	AttestedAt             time.Time `json:"attested_at"`
@@ -82,6 +85,9 @@ func verdictToView(v store.Verdict) (verdictView, error) {
 		SupabaseOrganizationID: derefOrEmpty(v.SupabaseOrganizationID),
 		ProjectsListed:         v.ProjectsListed,
 		ProjectsScanned:        v.ProjectsScanned,
+		GCPOrganizationID:      derefOrEmpty(v.GCPOrganizationID),
+		GCPProjectsListed:      v.GCPProjectsListed,
+		GCPProjectsScanned:     v.GCPProjectsScanned,
 		ScanID:                 v.ScanID,
 		AccountID:              v.AccountID,
 		AttestedAt:             v.AttestedAt,

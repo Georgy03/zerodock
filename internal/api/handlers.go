@@ -129,6 +129,9 @@ func (s *Server) handleCreateVerdict(w http.ResponseWriter, r *http.Request) {
 		SupabaseOrganizationID: emptyToNil(sub.SupabaseOrganizationID),
 		ProjectsListed:         sub.ProjectsListed,
 		ProjectsScanned:        sub.ProjectsScanned,
+		GCPOrganizationID:      emptyToNil(sub.GCPOrganizationID),
+		GCPProjectsListed:      sub.GCPProjectsListed,
+		GCPProjectsScanned:     sub.GCPProjectsScanned,
 		ScanID:                 sub.ScanID,
 		AccountID:              sub.AccountID,
 		AttestedAt:             sub.Timestamp,
@@ -224,6 +227,30 @@ func validateOrganizationScope(content report.AttestedContent) string {
 			for _, project := range content.ProjectsListed {
 				if _, ok := check.Accounts[project]; !ok {
 					return fmt.Sprintf("check %s has no per-project result for listed project %s", checkID, project)
+				}
+			}
+		}
+	}
+	if content.GCPOrganizationID != "" || len(content.GCPProjectsListed) > 0 || len(content.GCPProjectsScanned) > 0 {
+		if content.GCPOrganizationID == "" || len(content.GCPProjectsListed) == 0 {
+			return "GCP scope is incomplete: organization ID and gcp_projects_listed are required together"
+		}
+		listed := make(map[string]struct{}, len(content.GCPProjectsListed))
+		for _, project := range content.GCPProjectsListed {
+			listed[project] = struct{}{}
+		}
+		for _, project := range content.GCPProjectsScanned {
+			if _, ok := listed[project]; !ok {
+				return fmt.Sprintf("gcp_projects_scanned contains project %s, which is absent from gcp_projects_listed", project)
+			}
+		}
+		for checkID, check := range content.Checks {
+			if !strings.HasPrefix(checkID, "gcp.") {
+				continue
+			}
+			for _, project := range content.GCPProjectsListed {
+				if _, ok := check.Accounts[project]; !ok {
+					return fmt.Sprintf("check %s has no per-project result for listed GCP project %s", checkID, project)
 				}
 			}
 		}

@@ -97,6 +97,9 @@ function buildAttestedContentForHashing(resp: AttestedContent): Record<string, u
   if (resp.supabase_organization_id) obj.supabase_organization_id = resp.supabase_organization_id;
   if (resp.projects_listed && resp.projects_listed.length > 0) obj.projects_listed = resp.projects_listed;
   if (resp.projects_scanned && resp.projects_scanned.length > 0) obj.projects_scanned = resp.projects_scanned;
+  if (resp.gcp_organization_id) obj.gcp_organization_id = resp.gcp_organization_id;
+  if (resp.gcp_projects_listed && resp.gcp_projects_listed.length > 0) obj.gcp_projects_listed = resp.gcp_projects_listed;
+  if (resp.gcp_projects_scanned && resp.gcp_projects_scanned.length > 0) obj.gcp_projects_scanned = resp.gcp_projects_scanned;
   obj.account_id = resp.account_id;
   obj.scope_verified = resp.scope_verified;
   if (resp.scope_warning) obj.scope_warning = resp.scope_warning;

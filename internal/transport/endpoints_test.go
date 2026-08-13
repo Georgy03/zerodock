@@ -128,6 +128,18 @@ func TestEndpointTable_HasSupabaseManagementEndpoint(t *testing.T) {
 	}
 }
 
+func TestEndpointTable_HasEveryGoogleControlPlaneEndpoint(t *testing.T) {
+	for _, host := range []string{
+		"cloudresourcemanager.googleapis.com", "compute.googleapis.com",
+		"storage.googleapis.com", "iam.googleapis.com", "sqladmin.googleapis.com",
+		"logging.googleapis.com", "cloudkms.googleapis.com", "sts.googleapis.com",
+	} {
+		if _, ok := hostnameToVsockPort[host]; !ok {
+			t.Errorf("missing Google endpoint %s", host)
+		}
+	}
+}
+
 func TestVsockPortForHostname_S3VirtualHostedStyle(t *testing.T) {
 	tests := []struct {
 		host string

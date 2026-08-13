@@ -61,6 +61,14 @@ ENDPOINTS=(
 	"8125:secretsmanager.us-east-2.amazonaws.com"
 	"8126:bedrock-agent.us-east-1.amazonaws.com"
 	"8127:bedrock-agent.us-east-2.amazonaws.com"
+	"8128:cloudresourcemanager.googleapis.com"
+	"8129:compute.googleapis.com"
+	"8130:storage.googleapis.com"
+	"8131:iam.googleapis.com"
+	"8132:sqladmin.googleapis.com"
+	"8133:logging.googleapis.com"
+	"8134:cloudkms.googleapis.com"
+	"8135:sts.googleapis.com"
 )
 
 pids=()

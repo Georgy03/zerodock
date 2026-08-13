@@ -85,6 +85,9 @@ type Verdict struct {
 	SupabaseOrganizationID *string
 	ProjectsListed         []string
 	ProjectsScanned        []string
+	GCPOrganizationID      *string
+	GCPProjectsListed      []string
+	GCPProjectsScanned     []string
 	ScanID                 string
 	AccountID              string
 	AttestedAt             time.Time
@@ -123,6 +126,9 @@ type NewVerdict struct {
 	SupabaseOrganizationID *string
 	ProjectsListed         []string
 	ProjectsScanned        []string
+	GCPOrganizationID      *string
+	GCPProjectsListed      []string
+	GCPProjectsScanned     []string
 	ScanID                 string
 	AccountID              string
 	AttestedAt             time.Time
@@ -184,6 +190,7 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 			organization_verified, org_id, no_organization, organization_warning,
 			accounts_listed, accounts_scanned,
 			supabase_organization_id, projects_listed, projects_scanned,
+			gcp_organization_id, gcp_projects_listed, gcp_projects_scanned,
 			scan_id, account_id, attested_at,
 			scope_verified, scope_warning, time_verified, time_warning,
 			requested_regions, scanned_regions, regions_warning,
@@ -197,8 +204,9 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 			$12, $13, $14,
 			$15, $16, $17,
 			$18, $19, $20,
-			$21, $22,
-			$23, $24, $25, $26
+			$21, $22, $23,
+			$24, $25,
+			$26, $27, $28, $29
 		)
 		RETURNING id, received_at
 	`,
@@ -206,6 +214,7 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 		nv.OrganizationVerified, nv.OrgID, nv.NoOrganization, nv.OrganizationWarning,
 		nv.AccountsListed, nv.AccountsScanned,
 		nv.SupabaseOrganizationID, nv.ProjectsListed, nv.ProjectsScanned,
+		nv.GCPOrganizationID, nv.GCPProjectsListed, nv.GCPProjectsScanned,
 		nv.ScanID, nv.AccountID, nv.AttestedAt,
 		nv.ScopeVerified, nv.ScopeWarning, nv.TimeVerified, nv.TimeWarning,
 		nv.RequestedRegions, nv.ScannedRegions, nv.RegionsWarning,
@@ -242,6 +251,9 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 	v.SupabaseOrganizationID = nv.SupabaseOrganizationID
 	v.ProjectsListed = nv.ProjectsListed
 	v.ProjectsScanned = nv.ProjectsScanned
+	v.GCPOrganizationID = nv.GCPOrganizationID
+	v.GCPProjectsListed = nv.GCPProjectsListed
+	v.GCPProjectsScanned = nv.GCPProjectsScanned
 	v.ScanID = nv.ScanID
 	v.AccountID = nv.AccountID
 	v.AttestedAt = nv.AttestedAt
@@ -290,6 +302,7 @@ const verdictColumns = `
 	COALESCE(organization_verified, false), org_id, COALESCE(no_organization, false), organization_warning,
 	COALESCE(accounts_listed, ARRAY[]::text[]), COALESCE(accounts_scanned, ARRAY[]::text[]),
 	supabase_organization_id, COALESCE(projects_listed, ARRAY[]::text[]), COALESCE(projects_scanned, ARRAY[]::text[]),
+	gcp_organization_id, COALESCE(gcp_projects_listed, ARRAY[]::text[]), COALESCE(gcp_projects_scanned, ARRAY[]::text[]),
 	scan_id, account_id, attested_at, received_at,
 	scope_verified, scope_warning, time_verified, time_warning,
 	requested_regions, scanned_regions, regions_warning,
@@ -386,6 +399,7 @@ func scanVerdict(row scanner) (Verdict, error) {
 		&v.OrganizationVerified, &v.OrgID, &v.NoOrganization, &v.OrganizationWarning,
 		&v.AccountsListed, &v.AccountsScanned,
 		&v.SupabaseOrganizationID, &v.ProjectsListed, &v.ProjectsScanned,
+		&v.GCPOrganizationID, &v.GCPProjectsListed, &v.GCPProjectsScanned,
 		&v.ScanID, &v.AccountID, &v.AttestedAt, &v.ReceivedAt,
 		&v.ScopeVerified, &v.ScopeWarning, &v.TimeVerified, &v.TimeWarning,
 		&v.RequestedRegions, &v.ScannedRegions, &v.RegionsWarning,

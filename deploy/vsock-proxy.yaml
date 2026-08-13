@@ -67,3 +67,14 @@ allowlist:
   - {address: secretsmanager.us-east-2.amazonaws.com, port: 443}
   - {address: bedrock-agent.us-east-1.amazonaws.com, port: 443}
   - {address: bedrock-agent.us-east-2.amazonaws.com, port: 443}
+
+  # Google Cloud APIs, including sts.googleapis.com used only to exchange a
+  # signed AWS GetCallerIdentity request for a short-lived WIF token.
+  - {address: cloudresourcemanager.googleapis.com, port: 443}
+  - {address: compute.googleapis.com, port: 443}
+  - {address: storage.googleapis.com, port: 443}
+  - {address: iam.googleapis.com, port: 443}
+  - {address: sqladmin.googleapis.com, port: 443}
+  - {address: logging.googleapis.com, port: 443}
+  - {address: cloudkms.googleapis.com, port: 443}
+  - {address: sts.googleapis.com, port: 443}

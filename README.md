@@ -271,6 +271,55 @@ The scanner's AWS role needs a deliberately narrow
 `secretsmanager:GetSecretValue` allow statement for that one ARN;
 `SecurityAudit` does not grant secret-value reads by itself.
 
+### Google Cloud provider
+
+The GCP provider is opt-in. Its preferred credential is a **Workload Identity
+Federation (WIF) audience** configured to trust the AWS account/role hosting
+the enclave. The enclave signs an AWS `GetCallerIdentity` request and exchanges
+it with Google Security Token Service for a short-lived Google access token.
+No GCP service-account key is created, stored, or sent to ZeroDock. The WIF
+audience is an identifier, not a secret:
+
+```bash
+go run ./cmd/scanner --mock-attest \
+  --gcp-wif-audience //iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/zerodock/providers/aws
+```
+
+For a partner that cannot deploy WIF, the only fallback is a service-account
+JSON key in **that vendor's AWS Secrets Manager**. ZeroDock receives only the
+secret ARN; it fetches the JSON into enclave memory for one scan and never logs,
+persists, or attests the key:
+
+```bash
+go run ./cmd/scanner --mock-attest \
+  --gcp-service-account-key-secret-arn arn:aws:secretsmanager:us-east-1:123456789012:secret:zerodock-gcp
+```
+
+Use the same identifiers for an EIF build (never the key value):
+
+```bash
+make eif SCANNER_VERSION=v0.5.0 \
+  GCP_WIF_AUDIENCE=//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/zerodock/providers/aws
+```
+
+GCP scanning requires visibility of exactly one Cloud Resource Manager
+organization. The scanner recursively lists folders and projects, attesting
+`gcp_organization_id`, `gcp_projects_listed`, and `gcp_projects_scanned` in the
+report hash. A project-only credential is rejected: an empty organization list
+cannot safely be called a “no organization” estate, because it is
+indistinguishable from a credential deliberately limited to one project.
+This is an explicit fail-closed no-organization outcome, rather than a false
+coverage claim.
+
+GCP checks are provider-attested and cover public Storage IAM grants, uniform
+bucket access, aged service-account keys, primitive project roles, open VPC
+firewalls, Compute external IPs, Cloud SQL public IP/SSL/backups, KMS rotation,
+and organization-level Data Access audit logging. The WIF/service-account
+principal needs organization and folder/project Resource Manager list/get IAM
+policy permissions, plus read-only permissions for Storage, IAM service
+accounts/keys, Compute, Cloud SQL, Cloud KMS, and Logging. The AWS role also
+needs `secretsmanager:GetSecretValue` only when using the fallback ARN.
+
 The attested report contains `supabase_organization_id`, `projects_listed`,
 and `projects_scanned`. Supabase checks are:
 

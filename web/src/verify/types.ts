@@ -48,6 +48,9 @@ export interface AttestedContent {
   supabase_organization_id?: string;
   projects_listed?: string[];
   projects_scanned?: string[];
+  gcp_organization_id?: string;
+  gcp_projects_listed?: string[];
+  gcp_projects_scanned?: string[];
   account_id: string;
   scope_verified: boolean;
   scope_warning?: string;

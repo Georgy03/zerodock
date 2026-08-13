@@ -37,6 +37,7 @@ import (
 	"github.com/Georgy03/zerodock/internal/attest"
 	"github.com/Georgy03/zerodock/internal/buildinfo"
 	"github.com/Georgy03/zerodock/internal/checks"
+	"github.com/Georgy03/zerodock/internal/gcp"
 	"github.com/Georgy03/zerodock/internal/providers"
 	"github.com/Georgy03/zerodock/internal/report"
 	"github.com/Georgy03/zerodock/internal/supabase"
@@ -58,6 +59,8 @@ func main() {
 	mockAttest := flag.Bool("mock-attest", false, "use the mock attester and a normal network connection, for local development outside an enclave (default: real NSM attester + vsock networking)")
 	regionsFlag := flag.String("regions", "us-east-1,us-east-2", "comma-separated AWS regions to scan")
 	supabaseSecretARN := flag.String("supabase-secret-arn", os.Getenv("ZERODOCK_SUPABASE_SECRET_ARN"), "vendor-owned AWS Secrets Manager ARN containing an organization-scoped Supabase Management API token")
+	gcpWIFAudience := flag.String("gcp-wif-audience", os.Getenv("ZERODOCK_GCP_WIF_AUDIENCE"), "GCP workload identity provider audience (//iam.googleapis.com/projects/.../providers/...); WIF is preferred")
+	gcpServiceAccountKeySecretARN := flag.String("gcp-service-account-key-secret-arn", os.Getenv("ZERODOCK_GCP_SERVICE_ACCOUNT_KEY_SECRET_ARN"), "fallback vendor-owned AWS Secrets Manager ARN containing a GCP service-account JSON key")
 	flag.Parse()
 	requestedRegions, err := parseRegions(*regionsFlag)
 	if err != nil {
@@ -65,7 +68,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(*mockAttest, requestedRegions, *supabaseSecretARN); err != nil {
+	if err := run(*mockAttest, requestedRegions, *supabaseSecretARN, *gcpWIFAudience, *gcpServiceAccountKeySecretARN); err != nil {
 		// Print errors to STDERR (the "error output" stream) rather
 		// than mixing them into the JSON we print on success, and
 		// exit with a non-zero status code so scripts calling this
@@ -78,7 +81,7 @@ func main() {
 // run does the actual work. It's kept separate from main() so it can
 // return a normal Go error instead of needing to call os.Exit() itself —
 // that keeps error-handling in exactly one place (main).
-func run(mockAttest bool, requestedRegions []string, supabaseSecretARN string) error {
+func run(mockAttest bool, requestedRegions []string, supabaseSecretARN, gcpWIFAudience, gcpServiceAccountKeySecretARN string) error {
 	ctx := context.Background()
 
 	// Open the selected attester before making any AWS calls. In an
@@ -311,6 +314,11 @@ func run(mockAttest bool, requestedRegions []string, supabaseSecretARN string) e
 			return err
 		}
 	}
+	if gcpWIFAudience != "" || gcpServiceAccountKeySecretARN != "" {
+		if err := scanGCP(ctx, cfg, httpClient, gcpWIFAudience, gcpServiceAccountKeySecretARN, now, &rep); err != nil {
+			return err
+		}
+	}
 
 	// Turn the attested claim (which account, whether we could even
 	// confirm that, whether the clock was trustworthy, and every check's
@@ -385,6 +393,43 @@ func run(mockAttest bool, requestedRegions []string, supabaseSecretARN string) e
 		}
 	}
 
+	return nil
+}
+
+// scanGCP obtains a short-lived Google token in enclave memory, enumerates the
+// organization before any project is scanned, then keeps every result per
+// project. A project-scoped credential is rejected by EnumerateScope rather
+// than silently reducing the coverage denominator.
+func scanGCP(ctx context.Context, cfg aws.Config, httpClient *http.Client, wifAudience, serviceAccountKeySecretARN string, now time.Time, rep *report.Report) error {
+	token, err := gcp.AcquireToken(ctx, httpClient, cfg, wifAudience, serviceAccountKeySecretARN)
+	if err != nil {
+		return fmt.Errorf("acquire GCP token: %w", err)
+	}
+	defer func() { token = "" }()
+	client := gcp.NewClient(httpClient, token)
+	scope, err := client.EnumerateScope(ctx)
+	if err != nil {
+		return fmt.Errorf("enumerate GCP organization scope: %w", err)
+	}
+	rep.GCPOrganizationID = scope.OrganizationID
+	rep.GCPProjectsListed = append([]string(nil), scope.Projects...)
+	outputs := gcp.Scan(ctx, client, scope, now)
+	for id, output := range outputs {
+		rep.Checks[id] = report.CheckOutput{Title: output.Title, Tier: output.Tier, Accounts: output.Accounts, Result: aggregateAccountResults(output.Accounts)}
+	}
+	for _, project := range scope.Projects {
+		complete := true
+		for _, output := range outputs {
+			if result, ok := output.Accounts[project]; ok && result.Status == checks.StatusError {
+				complete = false
+				break
+			}
+		}
+		if complete {
+			rep.GCPProjectsScanned = append(rep.GCPProjectsScanned, project)
+		}
+	}
+	sort.Strings(rep.GCPProjectsScanned)
 	return nil
 }
 

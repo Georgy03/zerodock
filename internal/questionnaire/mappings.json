@@ -279,6 +279,94 @@
       "keyword_groups": [["artificial intelligence", "notebook", "encryption"], ["machine learning", "notebook", "encryption"], ["sagemaker", "notebook", "kms"], ["training data", "encrypted at rest"]],
       "verified_statement": "SageMaker notebook instances use KMS encryption",
       "not_in_use_statement": "No SageMaker notebook instances were found"
+    },
+    {
+      "check_id": "gcp.storage.public",
+      "caiq_ids": ["DSP-10"],
+      "soc2_ids": ["CC6.6", "CC6.7"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["cloud storage", "public access"], ["bucket", "public"], ["allusers"], ["allauthenticatedusers"]],
+      "verified_statement": "Google Cloud Storage bucket IAM policies do not grant public principals"
+    },
+    {
+      "check_id": "gcp.storage.uniform_access",
+      "caiq_ids": ["DSP-10"],
+      "soc2_ids": ["CC6.1", "CC6.6"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["uniform bucket-level access"], ["storage", "acl"], ["bucket", "access control"]],
+      "verified_statement": "Google Cloud Storage buckets use uniform bucket-level access"
+    },
+    {
+      "check_id": "gcp.iam.sa_key_age",
+      "caiq_ids": ["IAM-13"],
+      "soc2_ids": ["CC6.1", "CC6.2"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["service account", "key rotation"], ["service account", "access key"], ["credential", "90 days"]],
+      "verified_statement": "User-managed Google Cloud service-account keys are rotated within 90 days"
+    },
+    {
+      "check_id": "gcp.iam.primitive_roles",
+      "caiq_ids": ["IAM-01"],
+      "soc2_ids": ["CC6.1", "CC6.3"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["owner role"], ["editor role"], ["primitive role"], ["least privilege"]],
+      "verified_statement": "Google Cloud project IAM bindings do not grant primitive Owner or Editor roles"
+    },
+    {
+      "check_id": "gcp.compute.open_firewall",
+      "caiq_ids": ["IVS-06"],
+      "soc2_ids": ["CC6.6", "CC6.7"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["firewall", "0.0.0.0/0"], ["open ports"], ["ssh", "internet"], ["rdp", "internet"]],
+      "verified_statement": "Google Cloud VPC firewall rules do not expose sensitive administrative or database ports to the internet"
+    },
+    {
+      "check_id": "gcp.compute.public_ips",
+      "caiq_ids": ["IVS-06"],
+      "soc2_ids": ["CC6.6"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["compute", "public ip"], ["instance", "external ip"], ["virtual machine", "internet exposed"]],
+      "verified_statement": "Google Compute Engine instances do not have external IP addresses"
+    },
+    {
+      "check_id": "gcp.sql.public_ip",
+      "caiq_ids": ["IVS-06"],
+      "soc2_ids": ["CC6.6", "CC6.7"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["cloud sql", "public ip"], ["database", "authorized networks"], ["database", "internet exposed"]],
+      "verified_statement": "Cloud SQL public IP access is restricted by authorized networks"
+    },
+    {
+      "check_id": "gcp.sql.ssl_required",
+      "caiq_ids": ["EKM-03"],
+      "soc2_ids": ["CC6.7", "C1.1"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["cloud sql", "ssl"], ["database", "tls"], ["encrypted in transit", "database"]],
+      "verified_statement": "Cloud SQL instances require SSL for database connections"
+    },
+    {
+      "check_id": "gcp.sql.backup_enabled",
+      "caiq_ids": ["BCR-09"],
+      "soc2_ids": ["CC7.4", "A1.2"],
+      "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["cloud sql", "backup"], ["google cloud sql", "retention"], ["gcp", "database", "backup"]],
+      "verified_statement": "Cloud SQL automated backups are enabled with at least seven retained backups"
+    },
+    {
+      "check_id": "gcp.kms.key_rotation",
+      "caiq_ids": ["CEK-03"],
+      "soc2_ids": ["CC6.1", "C1.1"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["kms", "key rotation"], ["encryption key", "rotation"], ["cloud kms"]],
+      "verified_statement": "Google Cloud KMS encryption keys have automatic rotation periods"
+    },
+    {
+      "check_id": "gcp.logging.audit_config",
+      "caiq_ids": ["LOG-03"],
+      "soc2_ids": ["CC7.2", "CC7.3"],
+      "iso_42001_ids": ["8.1", "A.6"],
+      "keyword_groups": [["data access", "audit logs"], ["gcp", "audit logging"], ["cloud logging", "data read"]],
+      "verified_statement": "Organization-level Google Cloud Data Access audit logging enables DATA_READ and DATA_WRITE"
     }
   ],
   "account_overrides": {}
