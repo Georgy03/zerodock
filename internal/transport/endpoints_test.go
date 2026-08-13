@@ -140,6 +140,12 @@ func TestEndpointTable_HasEveryGoogleControlPlaneEndpoint(t *testing.T) {
 	}
 }
 
+func TestEndpointTable_HasEveryAzureEndpoint(t *testing.T) {
+	for _, host := range []string{"management.azure.com", "graph.microsoft.com", "login.microsoftonline.com"} {
+		if _, ok := hostnameToVsockPort[host]; !ok { t.Errorf("missing Azure endpoint %s", host) }
+	}
+}
+
 func TestVsockPortForHostname_S3VirtualHostedStyle(t *testing.T) {
 	tests := []struct {
 		host string

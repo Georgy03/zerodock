@@ -29,6 +29,17 @@ export function summarizeGCPCoverage(
   };
 }
 
+export function summarizeAzureCoverage(
+  content: Pick<AttestedContent, "azure_management_groups" | "azure_subscriptions_listed" | "azure_subscriptions_scanned">,
+): CoverageSummary | null {
+  const listed = content.azure_subscriptions_listed ?? [];
+  const scanned = content.azure_subscriptions_scanned ?? [];
+  if ((content.azure_management_groups?.length ?? 0) === 0 && listed.length === 0 && scanned.length === 0) return null;
+  const known = (content.azure_management_groups?.length ?? 0) > 0 && listed.length > 0;
+  const missing = listed.length - scanned.length;
+  return { known, listed: listed.length, scanned: scanned.length, note: known ? missing > 0 ? `${missing} listed Azure subscription${missing === 1 ? " was" : "s were"} not scanned.` : `Complete Azure management-group coverage verified across ${content.azure_management_groups?.length} management group(s).` : "Azure management-group coverage is unavailable." };
+}
+
 /** Builds the buyer-facing organization coverage claim from signed fields. */
 export function summarizeCoverage(
   content: Pick<

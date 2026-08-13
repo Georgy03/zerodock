@@ -35,6 +35,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/Georgy03/zerodock/internal/attest"
+	"github.com/Georgy03/zerodock/internal/azure"
 	"github.com/Georgy03/zerodock/internal/buildinfo"
 	"github.com/Georgy03/zerodock/internal/checks"
 	"github.com/Georgy03/zerodock/internal/gcp"
@@ -61,6 +62,7 @@ func main() {
 	supabaseSecretARN := flag.String("supabase-secret-arn", os.Getenv("ZERODOCK_SUPABASE_SECRET_ARN"), "vendor-owned AWS Secrets Manager ARN containing an organization-scoped Supabase Management API token")
 	gcpWIFAudience := flag.String("gcp-wif-audience", os.Getenv("ZERODOCK_GCP_WIF_AUDIENCE"), "GCP workload identity provider audience (//iam.googleapis.com/projects/.../providers/...); WIF is preferred")
 	gcpServiceAccountKeySecretARN := flag.String("gcp-service-account-key-secret-arn", os.Getenv("ZERODOCK_GCP_SERVICE_ACCOUNT_KEY_SECRET_ARN"), "fallback vendor-owned AWS Secrets Manager ARN containing a GCP service-account JSON key")
+	azureCredentialSecretARN := flag.String("azure-credential-secret-arn", os.Getenv("ZERODOCK_AZURE_CREDENTIAL_SECRET_ARN"), "vendor-owned AWS Secrets Manager ARN containing Azure service-principal JSON credentials or a short-lived WIF assertion")
 	flag.Parse()
 	requestedRegions, err := parseRegions(*regionsFlag)
 	if err != nil {
@@ -68,7 +70,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(*mockAttest, requestedRegions, *supabaseSecretARN, *gcpWIFAudience, *gcpServiceAccountKeySecretARN); err != nil {
+	if err := run(*mockAttest, requestedRegions, *supabaseSecretARN, *gcpWIFAudience, *gcpServiceAccountKeySecretARN, *azureCredentialSecretARN); err != nil {
 		// Print errors to STDERR (the "error output" stream) rather
 		// than mixing them into the JSON we print on success, and
 		// exit with a non-zero status code so scripts calling this
@@ -81,7 +83,7 @@ func main() {
 // run does the actual work. It's kept separate from main() so it can
 // return a normal Go error instead of needing to call os.Exit() itself —
 // that keeps error-handling in exactly one place (main).
-func run(mockAttest bool, requestedRegions []string, supabaseSecretARN, gcpWIFAudience, gcpServiceAccountKeySecretARN string) error {
+func run(mockAttest bool, requestedRegions []string, supabaseSecretARN, gcpWIFAudience, gcpServiceAccountKeySecretARN, azureCredentialSecretARN string) error {
 	ctx := context.Background()
 
 	// Open the selected attester before making any AWS calls. In an
@@ -319,6 +321,11 @@ func run(mockAttest bool, requestedRegions []string, supabaseSecretARN, gcpWIFAu
 			return err
 		}
 	}
+	if azureCredentialSecretARN != "" {
+		if err := scanAzure(ctx, cfg, httpClient, azureCredentialSecretARN, &rep); err != nil {
+			return err
+		}
+	}
 
 	// Turn the attested claim (which account, whether we could even
 	// confirm that, whether the clock was trustworthy, and every check's
@@ -430,6 +437,39 @@ func scanGCP(ctx context.Context, cfg aws.Config, httpClient *http.Client, wifAu
 		}
 	}
 	sort.Strings(rep.GCPProjectsScanned)
+	return nil
+}
+
+func scanAzure(ctx context.Context, cfg aws.Config, httpClient *http.Client, credentialSecretARN string, rep *report.Report) error {
+	armToken, graphToken, err := azure.AcquireTokens(ctx, httpClient, cfg, credentialSecretARN)
+	if err != nil {
+		return fmt.Errorf("acquire Azure tokens: %w", err)
+	}
+	defer func() { armToken = ""; graphToken = "" }()
+	client := azure.NewClient(httpClient, armToken, graphToken)
+	scope, err := client.EnumerateScope(ctx)
+	if err != nil {
+		return fmt.Errorf("enumerate Azure management-group scope: %w", err)
+	}
+	rep.AzureManagementGroups = append([]string(nil), scope.ManagementGroups...)
+	rep.AzureSubscriptionsListed = append([]string(nil), scope.Subscriptions...)
+	outputs := azure.Scan(ctx, client, scope)
+	for id, output := range outputs {
+		rep.Checks[id] = report.CheckOutput{Title: output.Title, Tier: output.Tier, Accounts: output.Accounts, Result: aggregateAccountResults(output.Accounts)}
+	}
+	for _, subscription := range scope.Subscriptions {
+		complete := true
+		for _, output := range outputs {
+			if output.Accounts[subscription].Status == checks.StatusError {
+				complete = false
+				break
+			}
+		}
+		if complete {
+			rep.AzureSubscriptionsScanned = append(rep.AzureSubscriptionsScanned, subscription)
+		}
+	}
+	sort.Strings(rep.AzureSubscriptionsScanned)
 	return nil
 }
 

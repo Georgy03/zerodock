@@ -7,6 +7,7 @@ SCANNER_VERSION ?= dev
 SUPABASE_SECRET_ARN ?=
 GCP_WIF_AUDIENCE ?=
 GCP_SERVICE_ACCOUNT_KEY_SECRET_ARN ?=
+AZURE_CREDENTIAL_SECRET_ARN ?=
 
 .PHONY: eif
 eif:
@@ -17,6 +18,7 @@ eif:
 		--build-arg SUPABASE_SECRET_ARN="$(SUPABASE_SECRET_ARN)" \
 		--build-arg GCP_WIF_AUDIENCE="$(GCP_WIF_AUDIENCE)" \
 		--build-arg GCP_SERVICE_ACCOUNT_KEY_SECRET_ARN="$(GCP_SERVICE_ACCOUNT_KEY_SECRET_ARN)" \
+		--build-arg AZURE_CREDENTIAL_SECRET_ARN="$(AZURE_CREDENTIAL_SECRET_ARN)" \
 		-t "$(IMAGE)" .
 	@echo "Building $(EIF); nitro-cli will print the enclave PCR measurements below."
 	$(NITRO_CLI) build-enclave --docker-uri "$(IMAGE)" --output-file "$(EIF)" | tee "$(EIF).measurements.json"

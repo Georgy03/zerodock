@@ -51,6 +51,9 @@ export interface AttestedContent {
   gcp_organization_id?: string;
   gcp_projects_listed?: string[];
   gcp_projects_scanned?: string[];
+  azure_management_groups?: string[];
+  azure_subscriptions_listed?: string[];
+  azure_subscriptions_scanned?: string[];
   account_id: string;
   scope_verified: boolean;
   scope_warning?: string;

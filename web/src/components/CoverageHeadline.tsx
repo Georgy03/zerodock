@@ -1,5 +1,5 @@
 import type { ShareResponse } from "../verify/types";
-import { summarizeCoverage, summarizeGCPCoverage } from "./coverage";
+import { summarizeCoverage, summarizeAzureCoverage, summarizeGCPCoverage } from "./coverage";
 
 /**
  * Coverage means accounts scanned out of accounts that exist. The current
@@ -9,6 +9,7 @@ import { summarizeCoverage, summarizeGCPCoverage } from "./coverage";
 export function CoverageHeadline({ resp, verified }: { resp: ShareResponse; verified: boolean }) {
   const coverage = summarizeCoverage(resp);
   const gcpCoverage = summarizeGCPCoverage(resp);
+  const azureCoverage = summarizeAzureCoverage(resp);
 
   return (
     <div className={`coverage-headline${verified ? "" : " coverage-headline--unverified"}`}>
@@ -32,6 +33,13 @@ export function CoverageHeadline({ resp, verified }: { resp: ShareResponse; veri
             {gcpCoverage.known ? `${gcpCoverage.scanned}/${gcpCoverage.listed}` : "Unknown"}
           </div>
           <div className="coverage-headline__note">{gcpCoverage.note}</div>
+        </div>
+      )}
+      {azureCoverage && (
+        <div className="coverage-headline__provider" aria-label="Azure subscription coverage">
+          <div className="coverage-headline__provider-label">Azure subscription coverage</div>
+          <div className="coverage-headline__provider-ratio">{azureCoverage.known ? `${azureCoverage.scanned}/${azureCoverage.listed}` : "Unknown"}</div>
+          <div className="coverage-headline__note">{azureCoverage.note}</div>
         </div>
       )}
     </div>

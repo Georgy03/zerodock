@@ -52,6 +52,12 @@ var gtsRootR4 []byte
 //go:embed rootcerts/GTSRootR1.pem
 var gtsRootR1 []byte
 
+// Azure Resource Manager, Microsoft Graph, and Microsoft Entra endpoints may
+// chain through DigiCert. Pin this explicit root with the AWS and Google roots.
+//
+//go:embed rootcerts/DigiCertGlobalRootG2.pem
+var digiCertGlobalRootG2 []byte
+
 // NewRootCAPool builds a certificate pool containing ONLY the embedded
 // Amazon Trust Services roots above — nothing from the operating system,
 // nothing from any file on disk. Passing this pool as an *http.Client's
@@ -67,6 +73,7 @@ func NewRootCAPool() (*x509.CertPool, error) {
 		"AmazonRootCA4.pem": amazonRootCA4,
 		"GTSRootR4.pem":     gtsRootR4,
 		"GTSRootR1.pem":     gtsRootR1,
+		"DigiCertGlobalRootG2.pem": digiCertGlobalRootG2,
 	}
 	for name, pemBytes := range roots {
 		if !pool.AppendCertsFromPEM(pemBytes) {

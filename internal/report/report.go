@@ -67,18 +67,21 @@ type AttestedContent struct {
 	// GCP scope is separate from Supabase: project IDs are only meaningful
 	// within their provider. Both lists are inside the attested hash so a
 	// project-scoped GCP credential cannot pretend to describe an organization.
-	GCPOrganizationID  string                 `json:"gcp_organization_id,omitempty"`
-	GCPProjectsListed  []string               `json:"gcp_projects_listed,omitempty"`
-	GCPProjectsScanned []string               `json:"gcp_projects_scanned,omitempty"`
-	AccountID          string                 `json:"account_id"`
-	ScopeVerified      bool                   `json:"scope_verified"`
-	ScopeWarning       string                 `json:"scope_warning,omitempty"`
-	TimeVerified       bool                   `json:"time_verified"`
-	TimeWarning        string                 `json:"time_warning,omitempty"`
-	RequestedRegions   []string               `json:"requested_regions"`
-	ScannedRegions     []string               `json:"scanned_regions"`
-	RegionsWarning     string                 `json:"regions_warning,omitempty"`
-	Checks             map[string]CheckOutput `json:"checks"`
+	GCPOrganizationID         string                 `json:"gcp_organization_id,omitempty"`
+	GCPProjectsListed         []string               `json:"gcp_projects_listed,omitempty"`
+	GCPProjectsScanned        []string               `json:"gcp_projects_scanned,omitempty"`
+	AzureManagementGroups     []string               `json:"azure_management_groups,omitempty"`
+	AzureSubscriptionsListed  []string               `json:"azure_subscriptions_listed,omitempty"`
+	AzureSubscriptionsScanned []string               `json:"azure_subscriptions_scanned,omitempty"`
+	AccountID                 string                 `json:"account_id"`
+	ScopeVerified             bool                   `json:"scope_verified"`
+	ScopeWarning              string                 `json:"scope_warning,omitempty"`
+	TimeVerified              bool                   `json:"time_verified"`
+	TimeWarning               string                 `json:"time_warning,omitempty"`
+	RequestedRegions          []string               `json:"requested_regions"`
+	ScannedRegions            []string               `json:"scanned_regions"`
+	RegionsWarning            string                 `json:"regions_warning,omitempty"`
+	Checks                    map[string]CheckOutput `json:"checks"`
 }
 
 // AttestationOutput is the small chunk of a report describing the signed

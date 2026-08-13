@@ -20,23 +20,26 @@ import (
 // verified — this endpoint hands over exactly what a from-scratch
 // verifier needs to do that.
 type verdictView struct {
-	ScannerVersion         string    `json:"scanner_version,omitempty"`
-	OrganizationVerified   bool      `json:"organization_verified,omitempty"`
-	OrgID                  string    `json:"org_id,omitempty"`
-	NoOrganization         bool      `json:"no_organization,omitempty"`
-	OrganizationWarning    string    `json:"organization_warning,omitempty"`
-	AccountsListed         []string  `json:"accounts_listed,omitempty"`
-	AccountsScanned        []string  `json:"accounts_scanned,omitempty"`
-	SupabaseOrganizationID string    `json:"supabase_organization_id,omitempty"`
-	ProjectsListed         []string  `json:"projects_listed,omitempty"`
-	ProjectsScanned        []string  `json:"projects_scanned,omitempty"`
-	GCPOrganizationID      string    `json:"gcp_organization_id,omitempty"`
-	GCPProjectsListed      []string  `json:"gcp_projects_listed,omitempty"`
-	GCPProjectsScanned     []string  `json:"gcp_projects_scanned,omitempty"`
-	ScanID                 string    `json:"scan_id"`
-	AccountID              string    `json:"account_id"`
-	AttestedAt             time.Time `json:"attested_at"`
-	ReceivedAt             time.Time `json:"received_at"`
+	ScannerVersion            string    `json:"scanner_version,omitempty"`
+	OrganizationVerified      bool      `json:"organization_verified,omitempty"`
+	OrgID                     string    `json:"org_id,omitempty"`
+	NoOrganization            bool      `json:"no_organization,omitempty"`
+	OrganizationWarning       string    `json:"organization_warning,omitempty"`
+	AccountsListed            []string  `json:"accounts_listed,omitempty"`
+	AccountsScanned           []string  `json:"accounts_scanned,omitempty"`
+	SupabaseOrganizationID    string    `json:"supabase_organization_id,omitempty"`
+	ProjectsListed            []string  `json:"projects_listed,omitempty"`
+	ProjectsScanned           []string  `json:"projects_scanned,omitempty"`
+	GCPOrganizationID         string    `json:"gcp_organization_id,omitempty"`
+	GCPProjectsListed         []string  `json:"gcp_projects_listed,omitempty"`
+	GCPProjectsScanned        []string  `json:"gcp_projects_scanned,omitempty"`
+	AzureManagementGroups     []string  `json:"azure_management_groups,omitempty"`
+	AzureSubscriptionsListed  []string  `json:"azure_subscriptions_listed,omitempty"`
+	AzureSubscriptionsScanned []string  `json:"azure_subscriptions_scanned,omitempty"`
+	ScanID                    string    `json:"scan_id"`
+	AccountID                 string    `json:"account_id"`
+	AttestedAt                time.Time `json:"attested_at"`
+	ReceivedAt                time.Time `json:"received_at"`
 
 	ScopeVerified bool   `json:"scope_verified"`
 	ScopeWarning  string `json:"scope_warning,omitempty"`
@@ -75,32 +78,35 @@ func verdictToView(v store.Verdict) (verdictView, error) {
 	}
 
 	return verdictView{
-		ScannerVersion:         v.ScannerVersion,
-		OrganizationVerified:   v.OrganizationVerified,
-		OrgID:                  derefOrEmpty(v.OrgID),
-		NoOrganization:         v.NoOrganization,
-		OrganizationWarning:    derefOrEmpty(v.OrganizationWarning),
-		AccountsListed:         v.AccountsListed,
-		AccountsScanned:        v.AccountsScanned,
-		SupabaseOrganizationID: derefOrEmpty(v.SupabaseOrganizationID),
-		ProjectsListed:         v.ProjectsListed,
-		ProjectsScanned:        v.ProjectsScanned,
-		GCPOrganizationID:      derefOrEmpty(v.GCPOrganizationID),
-		GCPProjectsListed:      v.GCPProjectsListed,
-		GCPProjectsScanned:     v.GCPProjectsScanned,
-		ScanID:                 v.ScanID,
-		AccountID:              v.AccountID,
-		AttestedAt:             v.AttestedAt,
-		ReceivedAt:             v.ReceivedAt,
-		ScopeVerified:          v.ScopeVerified,
-		ScopeWarning:           derefOrEmpty(v.ScopeWarning),
-		TimeVerified:           v.TimeVerified,
-		TimeWarning:            derefOrEmpty(v.TimeWarning),
-		RequestedRegions:       v.RequestedRegions,
-		ScannedRegions:         v.ScannedRegions,
-		RegionsWarning:         derefOrEmpty(v.RegionsWarning),
-		ResultsSHA384:          v.ResultsSHA384,
-		Checks:                 checksOut,
+		ScannerVersion:            v.ScannerVersion,
+		OrganizationVerified:      v.OrganizationVerified,
+		OrgID:                     derefOrEmpty(v.OrgID),
+		NoOrganization:            v.NoOrganization,
+		OrganizationWarning:       derefOrEmpty(v.OrganizationWarning),
+		AccountsListed:            v.AccountsListed,
+		AccountsScanned:           v.AccountsScanned,
+		SupabaseOrganizationID:    derefOrEmpty(v.SupabaseOrganizationID),
+		ProjectsListed:            v.ProjectsListed,
+		ProjectsScanned:           v.ProjectsScanned,
+		GCPOrganizationID:         derefOrEmpty(v.GCPOrganizationID),
+		GCPProjectsListed:         v.GCPProjectsListed,
+		GCPProjectsScanned:        v.GCPProjectsScanned,
+		AzureManagementGroups:     v.AzureManagementGroups,
+		AzureSubscriptionsListed:  v.AzureSubscriptionsListed,
+		AzureSubscriptionsScanned: v.AzureSubscriptionsScanned,
+		ScanID:                    v.ScanID,
+		AccountID:                 v.AccountID,
+		AttestedAt:                v.AttestedAt,
+		ReceivedAt:                v.ReceivedAt,
+		ScopeVerified:             v.ScopeVerified,
+		ScopeWarning:              derefOrEmpty(v.ScopeWarning),
+		TimeVerified:              v.TimeVerified,
+		TimeWarning:               derefOrEmpty(v.TimeWarning),
+		RequestedRegions:          v.RequestedRegions,
+		ScannedRegions:            v.ScannedRegions,
+		RegionsWarning:            derefOrEmpty(v.RegionsWarning),
+		ResultsSHA384:             v.ResultsSHA384,
+		Checks:                    checksOut,
 		Attestation: verdictAttestationView{
 			Format: v.AttestationFormat,
 			Mock:   v.AttestationMock,

@@ -73,25 +73,28 @@ func (s *Store) Close() {
 // layer needs to render a JSON response, plus AttestationRaw, the exact
 // bytes originally submitted.
 type Verdict struct {
-	ID                     int64
-	ShareToken             string
-	ScannerVersion         string
-	OrganizationVerified   bool
-	OrgID                  *string
-	NoOrganization         bool
-	OrganizationWarning    *string
-	AccountsListed         []string
-	AccountsScanned        []string
-	SupabaseOrganizationID *string
-	ProjectsListed         []string
-	ProjectsScanned        []string
-	GCPOrganizationID      *string
-	GCPProjectsListed      []string
-	GCPProjectsScanned     []string
-	ScanID                 string
-	AccountID              string
-	AttestedAt             time.Time
-	ReceivedAt             time.Time
+	ID                        int64
+	ShareToken                string
+	ScannerVersion            string
+	OrganizationVerified      bool
+	OrgID                     *string
+	NoOrganization            bool
+	OrganizationWarning       *string
+	AccountsListed            []string
+	AccountsScanned           []string
+	SupabaseOrganizationID    *string
+	ProjectsListed            []string
+	ProjectsScanned           []string
+	GCPOrganizationID         *string
+	GCPProjectsListed         []string
+	GCPProjectsScanned        []string
+	AzureManagementGroups     []string
+	AzureSubscriptionsListed  []string
+	AzureSubscriptionsScanned []string
+	ScanID                    string
+	AccountID                 string
+	AttestedAt                time.Time
+	ReceivedAt                time.Time
 
 	ScopeVerified bool
 	ScopeWarning  *string
@@ -116,22 +119,25 @@ type Verdict struct {
 // server's own verification outcome). ShareToken, ID, ReceivedAt, and
 // CreatedAt are assigned inside CreateVerdict, not supplied here.
 type NewVerdict struct {
-	ScannerVersion         string
-	OrganizationVerified   bool
-	OrgID                  *string
-	NoOrganization         bool
-	OrganizationWarning    *string
-	AccountsListed         []string
-	AccountsScanned        []string
-	SupabaseOrganizationID *string
-	ProjectsListed         []string
-	ProjectsScanned        []string
-	GCPOrganizationID      *string
-	GCPProjectsListed      []string
-	GCPProjectsScanned     []string
-	ScanID                 string
-	AccountID              string
-	AttestedAt             time.Time
+	ScannerVersion            string
+	OrganizationVerified      bool
+	OrgID                     *string
+	NoOrganization            bool
+	OrganizationWarning       *string
+	AccountsListed            []string
+	AccountsScanned           []string
+	SupabaseOrganizationID    *string
+	ProjectsListed            []string
+	ProjectsScanned           []string
+	GCPOrganizationID         *string
+	GCPProjectsListed         []string
+	GCPProjectsScanned        []string
+	AzureManagementGroups     []string
+	AzureSubscriptionsListed  []string
+	AzureSubscriptionsScanned []string
+	ScanID                    string
+	AccountID                 string
+	AttestedAt                time.Time
 
 	ScopeVerified bool
 	ScopeWarning  *string
@@ -191,6 +197,7 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 			accounts_listed, accounts_scanned,
 			supabase_organization_id, projects_listed, projects_scanned,
 			gcp_organization_id, gcp_projects_listed, gcp_projects_scanned,
+			azure_management_groups, azure_subscriptions_listed, azure_subscriptions_scanned,
 			scan_id, account_id, attested_at,
 			scope_verified, scope_warning, time_verified, time_warning,
 			requested_regions, scanned_regions, regions_warning,
@@ -205,8 +212,8 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 			$15, $16, $17,
 			$18, $19, $20,
 			$21, $22, $23,
-			$24, $25,
-			$26, $27, $28, $29
+			$24, $25, $26,
+			$27, $28, $29, $30
 		)
 		RETURNING id, received_at
 	`,
@@ -215,6 +222,7 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 		nv.AccountsListed, nv.AccountsScanned,
 		nv.SupabaseOrganizationID, nv.ProjectsListed, nv.ProjectsScanned,
 		nv.GCPOrganizationID, nv.GCPProjectsListed, nv.GCPProjectsScanned,
+		nv.AzureManagementGroups, nv.AzureSubscriptionsListed, nv.AzureSubscriptionsScanned,
 		nv.ScanID, nv.AccountID, nv.AttestedAt,
 		nv.ScopeVerified, nv.ScopeWarning, nv.TimeVerified, nv.TimeWarning,
 		nv.RequestedRegions, nv.ScannedRegions, nv.RegionsWarning,
@@ -254,6 +262,9 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 	v.GCPOrganizationID = nv.GCPOrganizationID
 	v.GCPProjectsListed = nv.GCPProjectsListed
 	v.GCPProjectsScanned = nv.GCPProjectsScanned
+	v.AzureManagementGroups = nv.AzureManagementGroups
+	v.AzureSubscriptionsListed = nv.AzureSubscriptionsListed
+	v.AzureSubscriptionsScanned = nv.AzureSubscriptionsScanned
 	v.ScanID = nv.ScanID
 	v.AccountID = nv.AccountID
 	v.AttestedAt = nv.AttestedAt
@@ -303,6 +314,7 @@ const verdictColumns = `
 	COALESCE(accounts_listed, ARRAY[]::text[]), COALESCE(accounts_scanned, ARRAY[]::text[]),
 	supabase_organization_id, COALESCE(projects_listed, ARRAY[]::text[]), COALESCE(projects_scanned, ARRAY[]::text[]),
 	gcp_organization_id, COALESCE(gcp_projects_listed, ARRAY[]::text[]), COALESCE(gcp_projects_scanned, ARRAY[]::text[]),
+	COALESCE(azure_management_groups, ARRAY[]::text[]), COALESCE(azure_subscriptions_listed, ARRAY[]::text[]), COALESCE(azure_subscriptions_scanned, ARRAY[]::text[]),
 	scan_id, account_id, attested_at, received_at,
 	scope_verified, scope_warning, time_verified, time_warning,
 	requested_regions, scanned_regions, regions_warning,
@@ -400,6 +412,7 @@ func scanVerdict(row scanner) (Verdict, error) {
 		&v.AccountsListed, &v.AccountsScanned,
 		&v.SupabaseOrganizationID, &v.ProjectsListed, &v.ProjectsScanned,
 		&v.GCPOrganizationID, &v.GCPProjectsListed, &v.GCPProjectsScanned,
+		&v.AzureManagementGroups, &v.AzureSubscriptionsListed, &v.AzureSubscriptionsScanned,
 		&v.ScanID, &v.AccountID, &v.AttestedAt, &v.ReceivedAt,
 		&v.ScopeVerified, &v.ScopeWarning, &v.TimeVerified, &v.TimeWarning,
 		&v.RequestedRegions, &v.ScannedRegions, &v.RegionsWarning,

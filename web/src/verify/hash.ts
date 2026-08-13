@@ -100,6 +100,9 @@ function buildAttestedContentForHashing(resp: AttestedContent): Record<string, u
   if (resp.gcp_organization_id) obj.gcp_organization_id = resp.gcp_organization_id;
   if (resp.gcp_projects_listed && resp.gcp_projects_listed.length > 0) obj.gcp_projects_listed = resp.gcp_projects_listed;
   if (resp.gcp_projects_scanned && resp.gcp_projects_scanned.length > 0) obj.gcp_projects_scanned = resp.gcp_projects_scanned;
+  if (resp.azure_management_groups && resp.azure_management_groups.length > 0) obj.azure_management_groups = resp.azure_management_groups;
+  if (resp.azure_subscriptions_listed && resp.azure_subscriptions_listed.length > 0) obj.azure_subscriptions_listed = resp.azure_subscriptions_listed;
+  if (resp.azure_subscriptions_scanned && resp.azure_subscriptions_scanned.length > 0) obj.azure_subscriptions_scanned = resp.azure_subscriptions_scanned;
   obj.account_id = resp.account_id;
   obj.scope_verified = resp.scope_verified;
   if (resp.scope_warning) obj.scope_warning = resp.scope_warning;

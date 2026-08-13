@@ -23,8 +23,8 @@ func TestNewRootCAPool_LoadsAllRoots(t *testing.T) {
 
 	//nolint:staticcheck // Subjects() is deprecated but there's no
 	// simpler way to sanity-check a cert count in a *x509.CertPool.
-	if got := len(pool.Subjects()); got != 6 {
-		t.Errorf("pool has %d certificates, want 6", got)
+	if got := len(pool.Subjects()); got != 7 {
+		t.Errorf("pool has %d certificates, want 7", got)
 	}
 }
 
@@ -44,6 +44,7 @@ func TestEmbeddedRoots_AreValidSelfSignedCACerts(t *testing.T) {
 		"AmazonRootCA4.pem": amazonRootCA4,
 		"GTSRootR4.pem":     gtsRootR4,
 		"GTSRootR1.pem":     gtsRootR1,
+		"DigiCertGlobalRootG2.pem": digiCertGlobalRootG2,
 	}
 
 	for name, pemBytes := range roots {

@@ -119,35 +119,38 @@ func (s *Server) handleCreateVerdict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v, err := s.store.CreateVerdict(r.Context(), store.NewVerdict{
-		ScannerVersion:         sub.ScannerVersion,
-		OrganizationVerified:   sub.OrganizationVerified,
-		OrgID:                  emptyToNil(sub.OrgID),
-		NoOrganization:         sub.NoOrganization,
-		OrganizationWarning:    emptyToNil(sub.OrganizationWarning),
-		AccountsListed:         sub.AccountsListed,
-		AccountsScanned:        sub.AccountsScanned,
-		SupabaseOrganizationID: emptyToNil(sub.SupabaseOrganizationID),
-		ProjectsListed:         sub.ProjectsListed,
-		ProjectsScanned:        sub.ProjectsScanned,
-		GCPOrganizationID:      emptyToNil(sub.GCPOrganizationID),
-		GCPProjectsListed:      sub.GCPProjectsListed,
-		GCPProjectsScanned:     sub.GCPProjectsScanned,
-		ScanID:                 sub.ScanID,
-		AccountID:              sub.AccountID,
-		AttestedAt:             sub.Timestamp,
-		ScopeVerified:          sub.ScopeVerified,
-		ScopeWarning:           emptyToNil(sub.ScopeWarning),
-		TimeVerified:           sub.TimeVerified,
-		TimeWarning:            emptyToNil(sub.TimeWarning),
-		RequestedRegions:       sub.RequestedRegions,
-		ScannedRegions:         sub.ScannedRegions,
-		RegionsWarning:         emptyToNil(sub.RegionsWarning),
-		ResultsSHA384:          sub.ResultsHash,
-		Checks:                 checksJSON,
-		AttestationFormat:      sub.Attestation.Format,
-		AttestationMock:        outcome.Mock,
-		PCRs:                   pcrsJSON,
-		AttestationRaw:         docBytes,
+		ScannerVersion:            sub.ScannerVersion,
+		OrganizationVerified:      sub.OrganizationVerified,
+		OrgID:                     emptyToNil(sub.OrgID),
+		NoOrganization:            sub.NoOrganization,
+		OrganizationWarning:       emptyToNil(sub.OrganizationWarning),
+		AccountsListed:            sub.AccountsListed,
+		AccountsScanned:           sub.AccountsScanned,
+		SupabaseOrganizationID:    emptyToNil(sub.SupabaseOrganizationID),
+		ProjectsListed:            sub.ProjectsListed,
+		ProjectsScanned:           sub.ProjectsScanned,
+		GCPOrganizationID:         emptyToNil(sub.GCPOrganizationID),
+		GCPProjectsListed:         sub.GCPProjectsListed,
+		GCPProjectsScanned:        sub.GCPProjectsScanned,
+		AzureManagementGroups:     sub.AzureManagementGroups,
+		AzureSubscriptionsListed:  sub.AzureSubscriptionsListed,
+		AzureSubscriptionsScanned: sub.AzureSubscriptionsScanned,
+		ScanID:                    sub.ScanID,
+		AccountID:                 sub.AccountID,
+		AttestedAt:                sub.Timestamp,
+		ScopeVerified:             sub.ScopeVerified,
+		ScopeWarning:              emptyToNil(sub.ScopeWarning),
+		TimeVerified:              sub.TimeVerified,
+		TimeWarning:               emptyToNil(sub.TimeWarning),
+		RequestedRegions:          sub.RequestedRegions,
+		ScannedRegions:            sub.ScannedRegions,
+		RegionsWarning:            emptyToNil(sub.RegionsWarning),
+		ResultsSHA384:             sub.ResultsHash,
+		Checks:                    checksJSON,
+		AttestationFormat:         sub.Attestation.Format,
+		AttestationMock:           outcome.Mock,
+		PCRs:                      pcrsJSON,
+		AttestationRaw:            docBytes,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrDuplicateScan) {
@@ -251,6 +254,30 @@ func validateOrganizationScope(content report.AttestedContent) string {
 			for _, project := range content.GCPProjectsListed {
 				if _, ok := check.Accounts[project]; !ok {
 					return fmt.Sprintf("check %s has no per-project result for listed GCP project %s", checkID, project)
+				}
+			}
+		}
+	}
+	if len(content.AzureManagementGroups) > 0 || len(content.AzureSubscriptionsListed) > 0 || len(content.AzureSubscriptionsScanned) > 0 {
+		if len(content.AzureManagementGroups) == 0 || len(content.AzureSubscriptionsListed) == 0 {
+			return "Azure scope is incomplete: management groups and subscriptions_listed are required together"
+		}
+		listed := map[string]struct{}{}
+		for _, subscription := range content.AzureSubscriptionsListed {
+			listed[subscription] = struct{}{}
+		}
+		for _, subscription := range content.AzureSubscriptionsScanned {
+			if _, ok := listed[subscription]; !ok {
+				return fmt.Sprintf("azure_subscriptions_scanned contains subscription %s absent from azure_subscriptions_listed", subscription)
+			}
+		}
+		for id, check := range content.Checks {
+			if !strings.HasPrefix(id, "azure.") {
+				continue
+			}
+			for _, subscription := range content.AzureSubscriptionsListed {
+				if _, ok := check.Accounts[subscription]; !ok {
+					return fmt.Sprintf("check %s has no result for listed Azure subscription %s", id, subscription)
 				}
 			}
 		}

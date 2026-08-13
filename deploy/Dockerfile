@@ -24,6 +24,7 @@ ARG SCANNER_VERSION=dev
 ARG SUPABASE_SECRET_ARN=
 ARG GCP_WIF_AUDIENCE=
 ARG GCP_SERVICE_ACCOUNT_KEY_SECRET_ARN=
+ARG AZURE_CREDENTIAL_SECRET_ARN=
 
 WORKDIR /src
 
@@ -52,6 +53,7 @@ FROM scratch
 ARG SUPABASE_SECRET_ARN
 ARG GCP_WIF_AUDIENCE
 ARG GCP_SERVICE_ACCOUNT_KEY_SECRET_ARN
+ARG AZURE_CREDENTIAL_SECRET_ARN
 # This is an ARN, never the Supabase token. The scanner fetches the token from
 # the vendor's own AWS Secrets Manager only after it starts inside the enclave.
 ENV ZERODOCK_SUPABASE_SECRET_ARN=${SUPABASE_SECRET_ARN}
@@ -59,6 +61,7 @@ ENV ZERODOCK_SUPABASE_SECRET_ARN=${SUPABASE_SECRET_ARN}
 # credentials. The scanner exchanges AWS credentials for a short-lived token.
 ENV ZERODOCK_GCP_WIF_AUDIENCE=${GCP_WIF_AUDIENCE}
 ENV ZERODOCK_GCP_SERVICE_ACCOUNT_KEY_SECRET_ARN=${GCP_SERVICE_ACCOUNT_KEY_SECRET_ARN}
+ENV ZERODOCK_AZURE_CREDENTIAL_SECRET_ARN=${AZURE_CREDENTIAL_SECRET_ARN}
 
 # TLS root certificates, so the scanner can validate AWS's HTTPS
 # certificates once it has network access (not yet — that's a later

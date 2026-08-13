@@ -77,6 +77,9 @@ const (
 	portGCPLogging         = 8133
 	portGCPKMS             = 8134
 	portGCPSTS             = 8135
+	portAzureManagement     = 8136
+	portMicrosoftGraph      = 8137
+	portMicrosoftLogin      = 8138
 
 	// VsockPortCredentials is the dedicated port the enclave connects to
 	// ONCE at startup to receive its temporary AWS credentials from the
@@ -158,6 +161,9 @@ var hostnameToVsockPort = map[string]uint32{
 	"logging.googleapis.com":              portGCPLogging,
 	"cloudkms.googleapis.com":             portGCPKMS,
 	"sts.googleapis.com":                  portGCPSTS,
+	"management.azure.com":                portAzureManagement,
+	"graph.microsoft.com":                 portMicrosoftGraph,
+	"login.microsoftonline.com":           portMicrosoftLogin,
 
 	// Vendor provider tokens remain in the vendor's own AWS Secrets Manager.
 	"secretsmanager.us-east-1.amazonaws.com": portSecretsManagerEast1,

@@ -367,6 +367,72 @@
       "iso_42001_ids": ["8.1", "A.6"],
       "keyword_groups": [["data access", "audit logs"], ["gcp", "audit logging"], ["cloud logging", "data read"]],
       "verified_statement": "Organization-level Google Cloud Data Access audit logging enables DATA_READ and DATA_WRITE"
+    },
+    {
+      "check_id": "azure.storage.public_containers",
+      "caiq_ids": ["DSP-10"], "soc2_ids": ["CC6.6"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["blob container", "public"], ["storage", "public access"]],
+      "verified_statement": "Azure blob containers do not allow anonymous public access"
+    },
+    {
+      "check_id": "azure.storage.https_only",
+      "caiq_ids": ["EKM-03"], "soc2_ids": ["CC6.7"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["storage", "https"], ["encrypted in transit", "storage"]],
+      "verified_statement": "Azure Storage accounts require HTTPS traffic"
+    },
+    {
+      "check_id": "azure.storage.min_tls",
+      "caiq_ids": ["EKM-03"], "soc2_ids": ["CC6.7"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["storage", "tls 1.2"], ["minimum tls"]],
+      "verified_statement": "Azure Storage accounts require TLS 1.2 or later"
+    },
+    {
+      "check_id": "azure.nsg.open_rules",
+      "caiq_ids": ["IVS-06"], "soc2_ids": ["CC6.6"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["network security group"], ["firewall", "0.0.0.0/0"], ["ssh", "internet"]],
+      "verified_statement": "Azure NSGs do not expose sensitive ports to the internet"
+    },
+    {
+      "check_id": "azure.sql.public_access",
+      "caiq_ids": ["IVS-06"], "soc2_ids": ["CC6.6"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["azure sql", "public access"], ["database", "internet exposed"]],
+      "verified_statement": "Azure SQL public network access is restricted"
+    },
+    {
+      "check_id": "azure.sql.tde",
+      "caiq_ids": ["CEK-03"], "soc2_ids": ["C1.1"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["transparent data encryption"], ["database", "encrypted at rest"]],
+      "verified_statement": "Azure SQL databases use Transparent Data Encryption"
+    },
+    {
+      "check_id": "azure.keyvault.soft_delete",
+      "caiq_ids": ["BCR-03"], "soc2_ids": ["CC7.4"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["key vault", "soft delete"], ["purge protection"]],
+      "verified_statement": "Azure Key Vaults enable soft delete and purge protection"
+    },
+    {
+      "check_id": "azure.identity.security_defaults",
+      "caiq_ids": ["IAM-13"], "soc2_ids": ["CC6.1"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["security defaults"], ["identity", "mfa"]],
+      "verified_statement": "Microsoft Entra Security Defaults are enabled or a separately reviewed Conditional Access control is required"
+    },
+    {
+      "check_id": "azure.identity.global_admins",
+      "caiq_ids": ["IAM-01"], "soc2_ids": ["CC6.2"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["global administrator"], ["privileged identity", "administrator"]],
+      "verified_statement": "Microsoft Entra Global Administrator count is within the scanner threshold"
+    },
+    {
+      "check_id": "azure.monitor.activity_log",
+      "caiq_ids": ["LOG-03"], "soc2_ids": ["CC7.2"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["activity log"], ["azure", "audit logging"]],
+      "verified_statement": "Azure subscriptions export Activity Log through diagnostic settings"
+    },
+    {
+      "check_id": "azure.disk.encryption",
+      "caiq_ids": ["CEK-03"], "soc2_ids": ["C1.1"], "iso_42001_ids": ["8.1"],
+      "keyword_groups": [["managed disk", "customer-managed key"], ["disk", "encrypted at rest"]],
+      "verified_statement": "Azure managed disks use customer-managed encryption keys"
     }
   ],
   "account_overrides": {}

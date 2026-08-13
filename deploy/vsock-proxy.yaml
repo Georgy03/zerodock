@@ -78,3 +78,8 @@ allowlist:
   - {address: logging.googleapis.com, port: 443}
   - {address: cloudkms.googleapis.com, port: 443}
   - {address: sts.googleapis.com, port: 443}
+
+  # Azure Resource Manager, Microsoft Graph, and Microsoft Entra token issuer.
+  - {address: management.azure.com, port: 443}
+  - {address: graph.microsoft.com, port: 443}
+  - {address: login.microsoftonline.com, port: 443}

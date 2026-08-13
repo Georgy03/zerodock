@@ -69,6 +69,9 @@ ENDPOINTS=(
 	"8133:logging.googleapis.com"
 	"8134:cloudkms.googleapis.com"
 	"8135:sts.googleapis.com"
+	"8136:management.azure.com"
+	"8137:graph.microsoft.com"
+	"8138:login.microsoftonline.com"
 )
 
 pids=()

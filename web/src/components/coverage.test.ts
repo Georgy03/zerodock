@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeCoverage, summarizeGCPCoverage } from "./coverage";
+import { summarizeAzureCoverage, summarizeCoverage, summarizeGCPCoverage } from "./coverage";
 
 describe("summarizeCoverage", () => {
   it("produces the signed organization-wide 18 of 18 headline", () => {
@@ -24,6 +24,13 @@ describe("summarizeCoverage", () => {
 
     expect(summary.known).toBe(false);
     expect(summary.note).toBe("AccessDenied");
+  });
+});
+
+describe("summarizeAzureCoverage", () => {
+  it("keeps Azure subscriptions as a third independent denominator", () => {
+    const summary = summarizeAzureCoverage({ azure_management_groups: ["root"], azure_subscriptions_listed: ["a", "b"], azure_subscriptions_scanned: ["a", "b"] });
+    expect(summary).toMatchObject({ known: true, scanned: 2, listed: 2 });
   });
 });
 
