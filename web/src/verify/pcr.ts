@@ -16,6 +16,18 @@ const RELEASE_TAG = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Z
 
 const SHA384_HEX = /^[0-9a-f]{96}$/;
 
+// Release tags are immutable policy, but v0.3.0 was tagged after an earlier
+// measurement had already produced a real report. These are immutable Git
+// commit URLs, not mutable branches: they preserve the historically published
+// pcrs.json rather than rewriting the tag and breaking CDN caches or audit
+// links. The unversioned entry predates scanner_version being attested.
+const HISTORICAL_MANIFESTS: Record<string, readonly string[]> = {
+  "v0.3.0": ["https://raw.githubusercontent.com/Georgy03/zerodock/0cf53a6741fb26cf7b13b9a2ab6e329dc615aee7/pcrs.json"],
+};
+const PRE_VERSION_MANIFESTS = [
+  "https://raw.githubusercontent.com/Georgy03/zerodock/77cdfcc3a962f06e7d638c50e403f01f645d452d/pcrs.json",
+] as const;
+
 export class PCRVerificationError extends Error {
   constructor(message: string) {
     super(message);
@@ -50,38 +62,50 @@ export async function checkPublishedPCR0(
     throw new PCRVerificationError("Attestation is missing a 48-byte SHA-384 PCR0 measurement.");
   }
 
-  const sourceURL = publishedPCRsURL(scannerVersion);
+  const actualPCR0 = bytesToHex(attestedPCR0);
+  if (scannerVersion === undefined) {
+    return matchHistoricalManifest(actualPCR0, PRE_VERSION_MANIFESTS, fetchFn, "This legacy attestation has no scanner_version");
+  }
 
+  const sourceURL = publishedPCRsURL(scannerVersion);
+  const publishedPCR0 = await fetchManifestPCR0(sourceURL, fetchFn);
+  if (actualPCR0 === publishedPCR0) return { actualPCR0, publishedPCR0, sourceURL };
+
+  const historical = HISTORICAL_MANIFESTS[scannerVersion] ?? [];
+  if (historical.length > 0) {
+    try {
+      return await matchHistoricalManifest(actualPCR0, historical, fetchFn, `No historical ${scannerVersion} measurement matched`);
+    } catch (err) {
+      if (!(err instanceof PCRVerificationError)) throw err;
+      // Keep the canonical tag mismatch in the final error. It is the most
+      // actionable explanation for a scanner version not listed above.
+    }
+  }
+  throw new PCRVerificationError(`Attested PCR0 ${actualPCR0} does not match published ZeroDock PCR0 ${publishedPCR0}.`);
+}
+
+async function matchHistoricalManifest(actualPCR0: string, urls: readonly string[], fetchFn: typeof fetch, prefix: string): Promise<PCRCheckResult> {
+  for (const sourceURL of urls) {
+    const publishedPCR0 = await fetchManifestPCR0(sourceURL, fetchFn);
+    if (actualPCR0 === publishedPCR0) return { actualPCR0, publishedPCR0, sourceURL };
+  }
+  throw new PCRVerificationError(`${prefix}; its signed PCR0 does not match any immutable historical release manifest.`);
+}
+
+async function fetchManifestPCR0(sourceURL: string, fetchFn: typeof fetch): Promise<string> {
   let response: Response;
   try {
-    response = await fetchFn(sourceURL, {
-      headers: { Accept: "application/json" },
-      cache: "no-cache",
-    });
+    response = await fetchFn(sourceURL, { headers: { Accept: "application/json" }, cache: "no-cache" });
   } catch (err) {
     throw new PCRVerificationError(`Could not fetch published PCR measurements from GitHub: ${errorMessage(err)}`);
   }
-
-  if (!response.ok) {
-    throw new PCRVerificationError(`GitHub returned HTTP ${response.status} fetching published PCR measurements.`);
-  }
-
-  let manifest: unknown;
+  if (!response.ok) throw new PCRVerificationError(`GitHub returned HTTP ${response.status} fetching published PCR measurements.`);
   try {
-    manifest = await response.json();
+    return parsePublishedPCR0(await response.json());
   } catch (err) {
+    if (err instanceof PCRVerificationError) throw err;
     throw new PCRVerificationError(`Published PCR manifest is not valid JSON: ${errorMessage(err)}`);
   }
-
-  const publishedPCR0 = parsePublishedPCR0(manifest);
-  const actualPCR0 = bytesToHex(attestedPCR0);
-  if (actualPCR0 !== publishedPCR0) {
-    throw new PCRVerificationError(
-      `Attested PCR0 ${actualPCR0} does not match published ZeroDock PCR0 ${publishedPCR0}.`,
-    );
-  }
-
-  return { actualPCR0, publishedPCR0, sourceURL };
 }
 
 /**

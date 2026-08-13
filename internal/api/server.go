@@ -29,6 +29,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+
+	"github.com/Georgy03/zerodock/internal/providers"
 	"github.com/Georgy03/zerodock/internal/questionnaire"
 	"github.com/Georgy03/zerodock/internal/store"
 	"github.com/Georgy03/zerodock/internal/verify"
@@ -54,6 +57,8 @@ type verdictStore interface {
 	ShareLinkStatus(ctx context.Context, token string) (exists, revoked bool, err error)
 	LatestVerdict(ctx context.Context, token string) (store.Verdict, error)
 	VerdictHistory(ctx context.Context, token string, limit int) ([]store.Verdict, error)
+	CreateOnboarding(ctx context.Context, customerAccountID string) (store.Onboarding, error)
+	GetOnboarding(ctx context.Context, tenantID string) (store.Onboarding, error)
 }
 
 // Server holds everything the HTTP handlers need: the database (via
@@ -72,21 +77,48 @@ type Server struct {
 	// handler behavior can be exercised without needing a real signed
 	// attestation document for every test case.
 	verifyFn func(signedDoc []byte, opts verify.Options) (verify.Outcome, error)
+
+	// Onboarding config. scannerAccountID empty means onboarding is not
+	// configured on this server — handleCreateOnboarding responds 503
+	// rather than generating a command that can never actually connect
+	// to anything.
+	scannerAccountID   string
+	onboardTemplateURL string
+	awsConfig          aws.Config
+	onboardingCheck    onboardingChecker
 }
 
 // New builds a Server backed by a real *store.Store. publicBaseURL is the API
 // origin returned by verdict ingest; buyerBaseURL is the independent browser
 // verifier written into questionnaire evidence cells. Keeping them separate
 // prevents an exported questionnaire from linking a buyer to raw JSON.
+//
+// Onboarding is configured separately via EnableOnboarding, since it needs
+// ZeroDock's own AWS credentials and is optional — a server can run every
+// other endpoint without it.
 func New(st *store.Store, verifyOpts verify.Options, publicBaseURL, buyerBaseURL string, questionnaires *questionnaire.Engine) *Server {
 	return &Server{
-		store:          st,
-		verifyOpts:     verifyOpts,
-		publicBase:     strings.TrimRight(publicBaseURL, "/"),
-		buyerBase:      strings.TrimRight(buyerBaseURL, "/"),
-		questionnaires: questionnaires,
-		verifyFn:       verify.Verify,
+		store:           st,
+		verifyOpts:      verifyOpts,
+		publicBase:      strings.TrimRight(publicBaseURL, "/"),
+		buyerBase:       strings.TrimRight(buyerBaseURL, "/"),
+		questionnaires:  questionnaires,
+		verifyFn:        verify.Verify,
+		onboardingCheck: providers.CheckOnboardingStatus,
 	}
+}
+
+// EnableOnboarding configures the /v1/onboard endpoints: scannerAccountID
+// is ZeroDock's own AWS account ID (embedded into the generated
+// create-stack command as the trust-policy principal), templateURL is
+// where deploy/onboard.yaml is published for that command's
+// --template-url, and awsCfg carries the credentials used both to poll
+// AWS Organizations after assuming into a customer's management account,
+// and to assume directly into member accounts.
+func (s *Server) EnableOnboarding(scannerAccountID, templateURL string, awsCfg aws.Config) {
+	s.scannerAccountID = scannerAccountID
+	s.onboardTemplateURL = templateURL
+	s.awsConfig = awsCfg
 }
 
 func (s *Server) buyerURL(token string) string {
@@ -101,7 +133,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/verdicts", s.handleCreateVerdict)
 	mux.HandleFunc("GET /v1/share/{token}", s.handleLatest)
 	mux.HandleFunc("GET /v1/share/{token}/history", s.handleHistory)
+	mux.HandleFunc("GET /v1/share/{token}/history/{check_id}", s.handleControlHistory)
 	mux.HandleFunc("POST /v1/share/{token}/questionnaires/autofill", s.handleQuestionnaireAutofill)
+	mux.HandleFunc("POST /v1/onboard", s.handleCreateOnboarding)
+	mux.HandleFunc("GET /v1/onboard/{tenant}/status", s.handleOnboardingStatus)
 	return mux
 }
 

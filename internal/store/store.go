@@ -17,11 +17,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Georgy03/zerodock/internal/scope"
 )
 
 // ErrNotFound is returned when a lookup by token or scan ID finds
@@ -70,19 +73,22 @@ func (s *Store) Close() {
 // layer needs to render a JSON response, plus AttestationRaw, the exact
 // bytes originally submitted.
 type Verdict struct {
-	ID                   int64
-	ShareToken           string
-	ScannerVersion       string
-	OrganizationVerified bool
-	OrgID                *string
-	NoOrganization       bool
-	OrganizationWarning  *string
-	AccountsListed       []string
-	AccountsScanned      []string
-	ScanID               string
-	AccountID            string
-	AttestedAt           time.Time
-	ReceivedAt           time.Time
+	ID                     int64
+	ShareToken             string
+	ScannerVersion         string
+	OrganizationVerified   bool
+	OrgID                  *string
+	NoOrganization         bool
+	OrganizationWarning    *string
+	AccountsListed         []string
+	AccountsScanned        []string
+	SupabaseOrganizationID *string
+	ProjectsListed         []string
+	ProjectsScanned        []string
+	ScanID                 string
+	AccountID              string
+	AttestedAt             time.Time
+	ReceivedAt             time.Time
 
 	ScopeVerified bool
 	ScopeWarning  *string
@@ -107,16 +113,19 @@ type Verdict struct {
 // server's own verification outcome). ShareToken, ID, ReceivedAt, and
 // CreatedAt are assigned inside CreateVerdict, not supplied here.
 type NewVerdict struct {
-	ScannerVersion       string
-	OrganizationVerified bool
-	OrgID                *string
-	NoOrganization       bool
-	OrganizationWarning  *string
-	AccountsListed       []string
-	AccountsScanned      []string
-	ScanID               string
-	AccountID            string
-	AttestedAt           time.Time
+	ScannerVersion         string
+	OrganizationVerified   bool
+	OrgID                  *string
+	NoOrganization         bool
+	OrganizationWarning    *string
+	AccountsListed         []string
+	AccountsScanned        []string
+	SupabaseOrganizationID *string
+	ProjectsListed         []string
+	ProjectsScanned        []string
+	ScanID                 string
+	AccountID              string
+	AttestedAt             time.Time
 
 	ScopeVerified bool
 	ScopeWarning  *string
@@ -160,12 +169,21 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 		return Verdict{}, err
 	}
 
+	// Fetched BEFORE inserting the new verdict below, so this is
+	// genuinely the prior scan's attested inventory, not the one about
+	// to be inserted.
+	previousAccounts, err := previousAccountsSnapshot(ctx, tx, token)
+	if err != nil {
+		return Verdict{}, err
+	}
+
 	var v Verdict
 	err = tx.QueryRow(ctx, `
 		INSERT INTO verdicts (
 			share_token, scanner_version,
 			organization_verified, org_id, no_organization, organization_warning,
 			accounts_listed, accounts_scanned,
+			supabase_organization_id, projects_listed, projects_scanned,
 			scan_id, account_id, attested_at,
 			scope_verified, scope_warning, time_verified, time_warning,
 			requested_regions, scanned_regions, regions_warning,
@@ -176,16 +194,18 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 			$3, $4, $5, $6,
 			$7, $8,
 			$9, $10, $11,
-			$12, $13, $14, $15,
-			$16, $17, $18,
-			$19, $20,
-			$21, $22, $23, $24
+			$12, $13, $14,
+			$15, $16, $17,
+			$18, $19, $20,
+			$21, $22,
+			$23, $24, $25, $26
 		)
 		RETURNING id, received_at
 	`,
 		token, nv.ScannerVersion,
 		nv.OrganizationVerified, nv.OrgID, nv.NoOrganization, nv.OrganizationWarning,
 		nv.AccountsListed, nv.AccountsScanned,
+		nv.SupabaseOrganizationID, nv.ProjectsListed, nv.ProjectsScanned,
 		nv.ScanID, nv.AccountID, nv.AttestedAt,
 		nv.ScopeVerified, nv.ScopeWarning, nv.TimeVerified, nv.TimeWarning,
 		nv.RequestedRegions, nv.ScannedRegions, nv.RegionsWarning,
@@ -197,6 +217,14 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 			return Verdict{}, ErrDuplicateScan
 		}
 		return Verdict{}, fmt.Errorf("insert verdict: %w", err)
+	}
+
+	currentAccounts := scope.AccountsSnapshot{Listed: nv.AccountsListed, Scanned: nv.AccountsScanned}
+	for _, ev := range scope.Detect(previousAccounts, currentAccounts) {
+		log.Printf("store: scope drift for share token %s: %+v", token, ev)
+	}
+	if err := insertAccountHistory(ctx, tx, token, v.ID, nv.OrgID, nv.AttestedAt, nv.AccountsListed, nv.AccountsScanned); err != nil {
+		return Verdict{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -211,6 +239,9 @@ func (s *Store) CreateVerdict(ctx context.Context, nv NewVerdict) (Verdict, erro
 	v.OrganizationWarning = nv.OrganizationWarning
 	v.AccountsListed = nv.AccountsListed
 	v.AccountsScanned = nv.AccountsScanned
+	v.SupabaseOrganizationID = nv.SupabaseOrganizationID
+	v.ProjectsListed = nv.ProjectsListed
+	v.ProjectsScanned = nv.ProjectsScanned
 	v.ScanID = nv.ScanID
 	v.AccountID = nv.AccountID
 	v.AttestedAt = nv.AttestedAt
@@ -258,6 +289,7 @@ const verdictColumns = `
 	id, share_token, COALESCE(scanner_version, ''),
 	COALESCE(organization_verified, false), org_id, COALESCE(no_organization, false), organization_warning,
 	COALESCE(accounts_listed, ARRAY[]::text[]), COALESCE(accounts_scanned, ARRAY[]::text[]),
+	supabase_organization_id, COALESCE(projects_listed, ARRAY[]::text[]), COALESCE(projects_scanned, ARRAY[]::text[]),
 	scan_id, account_id, attested_at, received_at,
 	scope_verified, scope_warning, time_verified, time_warning,
 	requested_regions, scanned_regions, regions_warning,
@@ -353,6 +385,7 @@ func scanVerdict(row scanner) (Verdict, error) {
 		&v.ID, &v.ShareToken, &v.ScannerVersion,
 		&v.OrganizationVerified, &v.OrgID, &v.NoOrganization, &v.OrganizationWarning,
 		&v.AccountsListed, &v.AccountsScanned,
+		&v.SupabaseOrganizationID, &v.ProjectsListed, &v.ProjectsScanned,
 		&v.ScanID, &v.AccountID, &v.AttestedAt, &v.ReceivedAt,
 		&v.ScopeVerified, &v.ScopeWarning, &v.TimeVerified, &v.TimeWarning,
 		&v.RequestedRegions, &v.ScannedRegions, &v.RegionsWarning,
@@ -375,6 +408,73 @@ func scanVerdict(row scanner) (Verdict, error) {
 // callers race to create it — the "losing" caller's DO UPDATE is a
 // harmless no-op (it sets account_id to the value it already had) whose
 // only real purpose is making RETURNING hand back the WINNING token.
+// previousAccountsSnapshot fetches the most recently attested verdict's
+// account inventory for a share token, for comparison against the
+// verdict currently being inserted. Called before that insert happens,
+// so "latest" here still means the PRIOR scan. No prior verdict (this
+// token's very first scan) returns the zero value, which scope.Detect
+// treats as "nothing to have drifted from yet."
+func previousAccountsSnapshot(ctx context.Context, tx pgx.Tx, token string) (scope.AccountsSnapshot, error) {
+	var listed, scanned []string
+	err := tx.QueryRow(ctx, `
+		SELECT accounts_listed, accounts_scanned FROM verdicts
+		WHERE share_token = $1
+		ORDER BY attested_at DESC
+		LIMIT 1
+	`, token).Scan(&listed, &scanned)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return scope.AccountsSnapshot{}, nil
+	}
+	if err != nil {
+		return scope.AccountsSnapshot{}, fmt.Errorf("look up previous accounts snapshot: %w", err)
+	}
+	return scope.AccountsSnapshot{Listed: listed, Scanned: scanned}, nil
+}
+
+// insertAccountHistory records one account_history row per account this
+// verdict lists (whether or not the scan actually reached it), so later
+// queries can answer "when was this account first seen" and "what did
+// coverage look like at each past scan" without re-verifying every
+// historical attestation. first_seen_at is carried forward from any
+// prior row for the same (share_token, account_id) — an account that
+// disappears and later reappears keeps its ORIGINAL first-seen time, not
+// a reset one.
+func insertAccountHistory(ctx context.Context, tx pgx.Tx, shareToken string, verdictID int64, orgID *string, attestedAt time.Time, listed, scanned []string) error {
+	scannedSet := make(map[string]struct{}, len(scanned))
+	for _, id := range scanned {
+		scannedSet[id] = struct{}{}
+	}
+
+	for _, accountID := range listed {
+		status := "listed_unreachable"
+		if _, ok := scannedSet[accountID]; ok {
+			status = "scanned"
+		}
+
+		var priorFirstSeen *time.Time
+		err := tx.QueryRow(ctx, `
+			SELECT MIN(first_seen_at) FROM account_history
+			WHERE share_token = $1 AND account_id = $2
+		`, shareToken, accountID).Scan(&priorFirstSeen)
+		if err != nil {
+			return fmt.Errorf("look up first-seen for account %s: %w", accountID, err)
+		}
+		firstSeen := attestedAt
+		if priorFirstSeen != nil {
+			firstSeen = *priorFirstSeen
+		}
+
+		_, err = tx.Exec(ctx, `
+			INSERT INTO account_history (share_token, verdict_id, org_id, account_id, status, first_seen_at, observed_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`, shareToken, verdictID, orgID, accountID, status, firstSeen, attestedAt)
+		if err != nil {
+			return fmt.Errorf("insert account_history row for account %s: %w", accountID, err)
+		}
+	}
+	return nil
+}
+
 func getOrCreateShareLink(ctx context.Context, tx pgx.Tx, accountID string) (string, error) {
 	candidate, err := newToken()
 	if err != nil {
@@ -392,6 +492,56 @@ func getOrCreateShareLink(ctx context.Context, tx pgx.Tx, accountID string) (str
 		return "", fmt.Errorf("get or create share link: %w", err)
 	}
 	return token, nil
+}
+
+// Onboarding is one vendor's in-progress AWS connection request: the
+// tenant ID ZeroDock generated and the customer account ID the vendor
+// supplied, so a later status poll knows which account's
+// ZeroDockScannerRole to assume into.
+type Onboarding struct {
+	TenantID          string
+	CustomerAccountID string
+	CreatedAt         time.Time
+}
+
+// CreateOnboarding generates a new tenant ID and stores it alongside the
+// customer's AWS account ID. The tenant ID is also the sts:ExternalId the
+// generated CloudFormation command embeds, so it must be unguessable —
+// the same random-token construction as share_links tokens.
+func (s *Store) CreateOnboarding(ctx context.Context, customerAccountID string) (Onboarding, error) {
+	tenantID, err := newToken()
+	if err != nil {
+		return Onboarding{}, fmt.Errorf("generate tenant id: %w", err)
+	}
+
+	var ob Onboarding
+	err = s.pool.QueryRow(ctx, `
+		INSERT INTO onboardings (tenant_id, customer_account_id)
+		VALUES ($1, $2)
+		RETURNING tenant_id, customer_account_id, created_at
+	`, tenantID, customerAccountID).Scan(&ob.TenantID, &ob.CustomerAccountID, &ob.CreatedAt)
+	if err != nil {
+		return Onboarding{}, fmt.Errorf("create onboarding: %w", err)
+	}
+	return ob, nil
+}
+
+// GetOnboarding looks up a previously created onboarding by tenant ID.
+// Returns ErrNotFound if no such tenant ID exists.
+func (s *Store) GetOnboarding(ctx context.Context, tenantID string) (Onboarding, error) {
+	var ob Onboarding
+	err := s.pool.QueryRow(ctx, `
+		SELECT tenant_id, customer_account_id, created_at
+		FROM onboardings
+		WHERE tenant_id = $1
+	`, tenantID).Scan(&ob.TenantID, &ob.CustomerAccountID, &ob.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Onboarding{}, ErrNotFound
+	}
+	if err != nil {
+		return Onboarding{}, fmt.Errorf("get onboarding: %w", err)
+	}
+	return ob, nil
 }
 
 // newToken generates a random, unguessable share token: 16 random bytes,

@@ -19,10 +19,13 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 
 	"github.com/Georgy03/zerodock/internal/api"
 	"github.com/Georgy03/zerodock/internal/questionnaire"
@@ -68,6 +71,16 @@ func run() error {
 		return fmt.Errorf("load questionnaire mappings: %w", err)
 	}
 	srv := api.New(st, verify.Options{AllowMock: cfg.AllowMockAttestation}, cfg.PublicBaseURL, cfg.BuyerBaseURL, questionnaire.NewEngine(questionnaireConfig))
+
+	if cfg.ScannerAccountID != "" {
+		awsCfg, err := awsconfig.LoadDefaultConfig(startupCtx)
+		if err != nil {
+			return fmt.Errorf("load AWS config for onboarding: %w", err)
+		}
+		srv.EnableOnboarding(cfg.ScannerAccountID, cfg.OnboardTemplateURL, awsCfg)
+	} else {
+		log.Println("zerodock-api: ZERODOCK_SCANNER_ACCOUNT_ID not set; /v1/onboard is disabled")
+	}
 
 	httpServer := &http.Server{
 		Addr:    cfg.ListenAddr,
@@ -146,6 +159,17 @@ type config struct {
 	// QuestionnaireMappingsFile optionally replaces the embedded CAIQ/SOC 2
 	// mapping data and can contain per-account overrides.
 	QuestionnaireMappingsFile string
+
+	// ScannerAccountID is ZeroDock's own AWS account ID — the trust-policy
+	// principal embedded into every generated /v1/onboard create-stack
+	// command. Empty disables the onboarding endpoints entirely, since a
+	// command with no valid principal could never actually connect.
+	ScannerAccountID string
+
+	// OnboardTemplateURL is where deploy/onboard.yaml is published (e.g. a
+	// raw.githubusercontent.com URL for a tagged release), used as the
+	// generated command's --template-url.
+	OnboardTemplateURL string
 }
 
 func loadConfig() (config, error) {
@@ -179,6 +203,15 @@ func loadConfig() (config, error) {
 		return config{}, fmt.Errorf("BUYER_BASE_URL must use http or https")
 	}
 
+	scannerAccountID := strings.TrimSpace(os.Getenv("ZERODOCK_SCANNER_ACCOUNT_ID"))
+	if scannerAccountID != "" && !accountIDPattern.MatchString(scannerAccountID) {
+		return config{}, fmt.Errorf("ZERODOCK_SCANNER_ACCOUNT_ID must be exactly 12 digits")
+	}
+	onboardTemplateURL := strings.TrimSpace(os.Getenv("ZERODOCK_ONBOARD_TEMPLATE_URL"))
+	if scannerAccountID != "" && onboardTemplateURL == "" {
+		return config{}, fmt.Errorf("ZERODOCK_ONBOARD_TEMPLATE_URL is required when ZERODOCK_SCANNER_ACCOUNT_ID is set")
+	}
+
 	return config{
 		DatabaseURL:               dbURL,
 		ListenAddr:                listenAddr,
@@ -186,5 +219,9 @@ func loadConfig() (config, error) {
 		BuyerBaseURL:              strings.TrimRight(buyerBaseURL, "/"),
 		AllowMockAttestation:      allowMock,
 		QuestionnaireMappingsFile: os.Getenv("QUESTIONNAIRE_MAPPINGS_FILE"),
+		ScannerAccountID:          scannerAccountID,
+		OnboardTemplateURL:        onboardTemplateURL,
 	}, nil
 }
+
+var accountIDPattern = regexp.MustCompile(`^[0-9]{12}$`)

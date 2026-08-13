@@ -47,7 +47,7 @@ func TestEndpointTable_IAMIsGlobalNotRegional(t *testing.T) {
 // happens to run in the missing region, per the comment on
 // VsockDialer.DialContext.
 func TestEndpointTable_HasBothRegionsForRegionalServices(t *testing.T) {
-	regionalServices := []string{"ec2", "rds", "s3", "cloudtrail", "sts", "kms", "guardduty", "bedrock"}
+	regionalServices := []string{"ec2", "rds", "s3", "cloudtrail", "sts", "kms", "guardduty", "bedrock", "secretsmanager"}
 	for _, svc := range regionalServices {
 		for _, region := range []string{"us-east-1", "us-east-2"} {
 			host := svc + "." + region + ".amazonaws.com"
@@ -119,6 +119,12 @@ func TestEndpointTable_OrganizationsUsesItsGlobalHostedEndpoint(t *testing.T) {
 	}
 	if _, ok := hostnameToVsockPort["organizations.us-east-2.amazonaws.com"]; ok {
 		t.Error("Organizations must not be treated as a per-region service")
+	}
+}
+
+func TestEndpointTable_HasSupabaseManagementEndpoint(t *testing.T) {
+	if _, ok := hostnameToVsockPort["api.supabase.com"]; !ok {
+		t.Fatal("missing Supabase Management API endpoint")
 	}
 }
 

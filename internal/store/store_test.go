@@ -12,7 +12,9 @@ import (
 // the test entirely if that isn't set — this package's whole point is
 // talking to real Postgres, so there's no meaningful way to test it
 // without one. Point ZERODOCK_TEST_DATABASE_URL at a throwaway database
-// with migrations/0001_init.sql already applied, connecting as
+// with every migration in migrations/ already applied (in order — in
+// particular 0005_account_history.sql, which CreateVerdict now writes to
+// on every call), connecting as
 // zerodock_app (exactly the role/permissions the real server uses — see
 // that migration for why testing against the OWNER role instead would
 // hide exactly the bug this package most needs to catch: a query this
@@ -38,6 +40,11 @@ func testStore(t *testing.T) *Store {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() {
+		// account_history rows FK-reference verdicts, so they have to go
+		// first — deleting verdicts while account_history rows still
+		// point at them would fail the FK constraint, not silently
+		// cascade.
+		s.pool.Exec(context.Background(), "DELETE FROM account_history")
 		s.pool.Exec(context.Background(), "DELETE FROM verdicts")
 		s.pool.Exec(context.Background(), "DELETE FROM share_links")
 		s.Close()
@@ -266,5 +273,107 @@ func TestVerdictsAreAppendOnly(t *testing.T) {
 	_, err = s.pool.Exec(ctx, "DELETE FROM verdicts WHERE id = $1", v.ID)
 	if err == nil {
 		t.Fatal("DELETE on verdicts succeeded; the zerodock_app role must not be able to do this")
+	}
+}
+
+func strPtr(s string) *string { return &s }
+
+// TestCreateVerdict_PopulatesAccountHistoryWithFirstSeenAndDrift exercises
+// exactly the scenario internal/scope's own doc comment calls out: a
+// second scan adds a new account with no scanner role yet, dropping
+// coverage even though nothing about the two already-connected accounts
+// changed. It checks both that account_history gets one row per listed
+// account, correctly split into scanned/listed_unreachable, AND that
+// first_seen_at is carried forward for accounts that already existed
+// (not reset to the second scan's time).
+func TestCreateVerdict_PopulatesAccountHistoryWithFirstSeenAndDrift(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	firstAttestedAt := time.Now().Add(-time.Hour).UTC().Truncate(time.Millisecond)
+	first := sampleVerdict("scan-drift-1", "acct-drift-mgmt")
+	first.NoOrganization = false
+	first.OrgID = strPtr("o-drift-example")
+	first.AccountsListed = []string{"acct-drift-mgmt", "acct-drift-member"}
+	first.AccountsScanned = []string{"acct-drift-mgmt", "acct-drift-member"}
+	first.AttestedAt = firstAttestedAt
+
+	v1, err := s.CreateVerdict(ctx, first)
+	if err != nil {
+		t.Fatalf("CreateVerdict (first scan): %v", err)
+	}
+
+	secondAttestedAt := time.Now().UTC().Truncate(time.Millisecond)
+	second := sampleVerdict("scan-drift-2", "acct-drift-mgmt")
+	second.NoOrganization = false
+	second.OrgID = strPtr("o-drift-example")
+	second.AccountsListed = []string{"acct-drift-mgmt", "acct-drift-member", "acct-drift-new"}
+	second.AccountsScanned = []string{"acct-drift-mgmt", "acct-drift-member"} // acct-drift-new has no role yet
+	second.AttestedAt = secondAttestedAt
+
+	v2, err := s.CreateVerdict(ctx, second)
+	if err != nil {
+		t.Fatalf("CreateVerdict (second scan): %v", err)
+	}
+	if v1.ShareToken != v2.ShareToken {
+		t.Fatalf("expected both scans (same account_id) to share a token, got %s and %s", v1.ShareToken, v2.ShareToken)
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT verdict_id, account_id, status, first_seen_at, observed_at
+		FROM account_history WHERE share_token = $1
+		ORDER BY verdict_id, account_id
+	`, v1.ShareToken)
+	if err != nil {
+		t.Fatalf("query account_history: %v", err)
+	}
+	defer rows.Close()
+
+	type row struct {
+		VerdictID               int64
+		AccountID, Status       string
+		FirstSeenAt, ObservedAt time.Time
+	}
+	var got []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.VerdictID, &r.AccountID, &r.Status, &r.FirstSeenAt, &r.ObservedAt); err != nil {
+			t.Fatalf("scan account_history row: %v", err)
+		}
+		got = append(got, r)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("account_history rows: %v", err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("got %d account_history rows, want 5 (2 from the first scan + 3 from the second)", len(got))
+	}
+
+	for _, r := range got {
+		switch {
+		case r.VerdictID == v1.ID:
+			if r.Status != "scanned" {
+				t.Errorf("first scan account %s status = %s, want scanned", r.AccountID, r.Status)
+			}
+			if !r.FirstSeenAt.Equal(firstAttestedAt) {
+				t.Errorf("first scan account %s first_seen_at = %v, want %v", r.AccountID, r.FirstSeenAt, firstAttestedAt)
+			}
+		case r.VerdictID == v2.ID && (r.AccountID == "acct-drift-mgmt" || r.AccountID == "acct-drift-member"):
+			if r.Status != "scanned" {
+				t.Errorf("second scan account %s status = %s, want scanned", r.AccountID, r.Status)
+			}
+			if !r.FirstSeenAt.Equal(firstAttestedAt) {
+				t.Errorf("second scan account %s first_seen_at = %v, want carried forward from the first scan (%v), not reset", r.AccountID, r.FirstSeenAt, firstAttestedAt)
+			}
+		case r.VerdictID == v2.ID && r.AccountID == "acct-drift-new":
+			if r.Status != "listed_unreachable" {
+				t.Errorf("new account status = %s, want listed_unreachable (no scanner role yet)", r.Status)
+			}
+			if !r.FirstSeenAt.Equal(secondAttestedAt) {
+				t.Errorf("new account first_seen_at = %v, want %v (this scan's own time — it wasn't seen before)", r.FirstSeenAt, secondAttestedAt)
+			}
+		default:
+			t.Errorf("unexpected account_history row: verdict_id=%d account_id=%s", r.VerdictID, r.AccountID)
+		}
 	}
 }

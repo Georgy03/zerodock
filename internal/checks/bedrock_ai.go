@@ -237,9 +237,22 @@ func bedrockGuardrails(ctx context.Context, cfg aws.Config, _ time.Time) (Result
 				return nil, nil, 0, err
 			}
 			if logging.LoggingConfig != nil && bedrockLoggingEnabled(logging.LoggingConfig) {
+				// Someone had to explicitly turn logging on — that's a real
+				// signal Bedrock is in active use, and no guardrails
+				// alongside that signal is a genuine finding worth flagging.
 				return []string{fmt.Sprintf("%s: Bedrock invocation logging is enabled but no guardrails are configured", regionalCfg.Region)}, nil, 0, nil
 			}
-			return nil, []string{fmt.Sprintf("%s: no Bedrock guardrails are configured and invocation logging is disabled", regionalCfg.Region)}, 0, nil
+			// No guardrails AND no logging signal: nothing here looks like
+			// active Bedrock usage, so report this region clean rather than
+			// manufacturing an evidence line that reads like a problem
+			// ("guardrails absent, logging disabled") sitting right next to
+			// a summary that says "no applicable resources" — those two
+			// statements read as contradictory even though neither is
+			// technically wrong. The "logging disabled means ad-hoc calls
+			// can't be ruled out" caveat already belongs to, and is already
+			// surfaced by, aws.bedrock.invocation_logging; repeating it here
+			// only duplicates it under a status that says the opposite.
+			return nil, nil, 0, nil
 		}
 		var findings, evidence []string
 		for _, guardrail := range guardrails {

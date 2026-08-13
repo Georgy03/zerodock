@@ -1,9 +1,10 @@
 import { useState } from "react";
-import type { VerificationResult } from "../verify/verifier";
+import type { CheckOutcome, VerificationResult } from "../verify/verifier";
 
 /** Expandable panel: all client-side checks, pass/fail, and what each one actually did. */
-export function VerificationPanel({ result }: { result: VerificationResult }) {
+export function VerificationPanel({ result, additionalChecks = [] }: { result: VerificationResult; additionalChecks?: CheckOutcome[] }) {
   const [open, setOpen] = useState(result.status === "failed");
+  const checks = [...result.checks, ...additionalChecks];
 
   return (
     <section className="verification-panel">
@@ -13,12 +14,12 @@ export function VerificationPanel({ result }: { result: VerificationResult }) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        {open ? "▾" : "▸"} Verification details ({result.checks.filter((c) => c.passed).length}/
-        {result.checks.length} checks passed — verified entirely in your browser)
+        {open ? "▾" : "▸"} Verification details ({checks.filter((c) => c.passed).length}/
+        {checks.length} checks passed — verified entirely in your browser)
       </button>
       {open && (
         <ol className="verification-panel__list">
-          {result.checks.map((check) => (
+          {checks.map((check) => (
             <li key={check.name} className={`verification-check verification-check--${check.passed ? "pass" : "fail"}`}>
               <div className="verification-check__header">
                 <span className="status-dot" aria-hidden>

@@ -17,8 +17,8 @@ export function StatusBanner({ result }: { result: VerificationResult }) {
         <div>
           <div className="status-banner__title">Verified — hardware-attested</div>
           <div className="status-banner__subtitle">
-            All six client-side checks passed, entirely in this browser. Nothing here was taken on trust from the
-            server.
+            All report checks passed entirely in this browser. Historical changes, when available, are independently
+            verified and recomputed below — nothing came on trust from the server.
           </div>
         </div>
       </div>

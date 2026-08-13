@@ -10,8 +10,12 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
+	"time"
 
+	"github.com/Georgy03/zerodock/internal/checks"
 	"github.com/Georgy03/zerodock/internal/questionnaire"
 	"github.com/Georgy03/zerodock/internal/report"
 	"github.com/Georgy03/zerodock/internal/store"
@@ -115,29 +119,32 @@ func (s *Server) handleCreateVerdict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v, err := s.store.CreateVerdict(r.Context(), store.NewVerdict{
-		ScannerVersion:       sub.ScannerVersion,
-		OrganizationVerified: sub.OrganizationVerified,
-		OrgID:                emptyToNil(sub.OrgID),
-		NoOrganization:       sub.NoOrganization,
-		OrganizationWarning:  emptyToNil(sub.OrganizationWarning),
-		AccountsListed:       sub.AccountsListed,
-		AccountsScanned:      sub.AccountsScanned,
-		ScanID:               sub.ScanID,
-		AccountID:            sub.AccountID,
-		AttestedAt:           sub.Timestamp,
-		ScopeVerified:        sub.ScopeVerified,
-		ScopeWarning:         emptyToNil(sub.ScopeWarning),
-		TimeVerified:         sub.TimeVerified,
-		TimeWarning:          emptyToNil(sub.TimeWarning),
-		RequestedRegions:     sub.RequestedRegions,
-		ScannedRegions:       sub.ScannedRegions,
-		RegionsWarning:       emptyToNil(sub.RegionsWarning),
-		ResultsSHA384:        sub.ResultsHash,
-		Checks:               checksJSON,
-		AttestationFormat:    sub.Attestation.Format,
-		AttestationMock:      outcome.Mock,
-		PCRs:                 pcrsJSON,
-		AttestationRaw:       docBytes,
+		ScannerVersion:         sub.ScannerVersion,
+		OrganizationVerified:   sub.OrganizationVerified,
+		OrgID:                  emptyToNil(sub.OrgID),
+		NoOrganization:         sub.NoOrganization,
+		OrganizationWarning:    emptyToNil(sub.OrganizationWarning),
+		AccountsListed:         sub.AccountsListed,
+		AccountsScanned:        sub.AccountsScanned,
+		SupabaseOrganizationID: emptyToNil(sub.SupabaseOrganizationID),
+		ProjectsListed:         sub.ProjectsListed,
+		ProjectsScanned:        sub.ProjectsScanned,
+		ScanID:                 sub.ScanID,
+		AccountID:              sub.AccountID,
+		AttestedAt:             sub.Timestamp,
+		ScopeVerified:          sub.ScopeVerified,
+		ScopeWarning:           emptyToNil(sub.ScopeWarning),
+		TimeVerified:           sub.TimeVerified,
+		TimeWarning:            emptyToNil(sub.TimeWarning),
+		RequestedRegions:       sub.RequestedRegions,
+		ScannedRegions:         sub.ScannedRegions,
+		RegionsWarning:         emptyToNil(sub.RegionsWarning),
+		ResultsSHA384:          sub.ResultsHash,
+		Checks:                 checksJSON,
+		AttestationFormat:      sub.Attestation.Format,
+		AttestationMock:        outcome.Mock,
+		PCRs:                   pcrsJSON,
+		AttestationRaw:         docBytes,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrDuplicateScan) {
@@ -194,6 +201,30 @@ func validateOrganizationScope(content report.AttestedContent) string {
 		for _, accountID := range content.AccountsListed {
 			if _, ok := check.Accounts[accountID]; !ok {
 				return fmt.Sprintf("check %s has no per-account result for listed account %s", checkID, accountID)
+			}
+		}
+	}
+	if content.SupabaseOrganizationID != "" || len(content.ProjectsListed) > 0 || len(content.ProjectsScanned) > 0 {
+		if content.SupabaseOrganizationID == "" || len(content.ProjectsListed) == 0 {
+			return "Supabase scope is incomplete: organization ID and projects_listed are required together"
+		}
+		projects := make(map[string]struct{}, len(content.ProjectsListed))
+		for _, project := range content.ProjectsListed {
+			projects[project] = struct{}{}
+		}
+		for _, project := range content.ProjectsScanned {
+			if _, ok := projects[project]; !ok {
+				return fmt.Sprintf("projects_scanned contains project %s, which is absent from projects_listed", project)
+			}
+		}
+		for checkID, check := range content.Checks {
+			if !strings.HasPrefix(checkID, "supabase.") {
+				continue
+			}
+			for _, project := range content.ProjectsListed {
+				if _, ok := check.Accounts[project]; !ok {
+					return fmt.Sprintf("check %s has no per-project result for listed project %s", checkID, project)
+				}
 			}
 		}
 	}
@@ -269,6 +300,65 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		"token":    token,
 		"verdicts": views,
 	})
+}
+
+// handleControlHistory is a compact, server-side convenience index for one
+// check's per-account status timeline. It is intentionally not used as the
+// buyer page's source of truth: that page fetches full verdict history and
+// recomputes changes after independently verifying both attestations. This
+// endpoint is useful to integrations that only need a control's status series.
+func (s *Server) handleControlHistory(w http.ResponseWriter, r *http.Request) {
+	token, checkID := r.PathValue("token"), r.PathValue("check_id")
+	if !s.resolveShareLink(w, r, token) {
+		return
+	}
+	verdicts, err := s.store.VerdictHistory(r.Context(), token, 0)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load verdict history")
+		return
+	}
+
+	type transition struct {
+		ScanID         string    `json:"scan_id"`
+		AttestedAt     time.Time `json:"attested_at"`
+		AccountID      string    `json:"account_id"`
+		PreviousStatus string    `json:"previous_status,omitempty"`
+		CurrentStatus  string    `json:"current_status"`
+	}
+	// VerdictHistory is newest-first. Walk oldest-first so each emitted
+	// transition means "this is the status first observed at AttestedAt".
+	previous := map[string]string{}
+	var transitions []transition
+	for i := len(verdicts) - 1; i >= 0; i-- {
+		verdict := verdicts[i]
+		var allChecks map[string]report.CheckOutput
+		if err := json.Unmarshal(verdict.Checks, &allChecks); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to decode verdict checks")
+			return
+		}
+		check, exists := allChecks[checkID]
+		if !exists {
+			continue // This scanner version did not include the requested control.
+		}
+		statuses := check.Accounts
+		if len(statuses) == 0 {
+			statuses = map[string]checks.Result{verdict.AccountID: check.Result}
+		}
+		accountIDs := make([]string, 0, len(statuses))
+		for accountID := range statuses {
+			accountIDs = append(accountIDs, accountID)
+		}
+		sort.Strings(accountIDs)
+		for _, accountID := range accountIDs {
+			current := statuses[accountID].Status
+			prior, seen := previous[accountID]
+			if !seen || prior != current {
+				transitions = append(transitions, transition{ScanID: verdict.ScanID, AttestedAt: verdict.AttestedAt, AccountID: accountID, PreviousStatus: prior, CurrentStatus: current})
+			}
+			previous[accountID] = current
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "check_id": checkID, "transitions": transitions})
 }
 
 // handleQuestionnaireAutofill transforms one CSV/XLSX upload using the most

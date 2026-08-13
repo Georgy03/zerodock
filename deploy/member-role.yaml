@@ -9,6 +9,13 @@ Parameters:
     Type: String
     Description: AWS account ID whose scanner role may assume this role.
     AllowedPattern: "^[0-9]{12}$"
+  TenantId:
+    Type: String
+    Description: >-
+      ZeroDock tenant identifier, enforced as an sts:ExternalId condition so
+      a credential leaked from one tenant cannot assume into another
+      tenant's member roles.
+    MinLength: 8
 
 Resources:
   ZeroDockScannerMemberRole:
@@ -29,6 +36,9 @@ Resources:
             Principal:
               AWS: !Sub "arn:${AWS::Partition}:iam::${ScannerAccountId}:root"
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref TenantId
       ManagedPolicyArns:
         # SecurityAudit currently covers all scanner read calls across EC2,
         # RDS, S3, CloudTrail, IAM, KMS, GuardDuty, Bedrock, SageMaker, and

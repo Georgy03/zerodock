@@ -15,9 +15,10 @@ import { verifySignature, SignatureVerificationError } from "./signature";
 import { checkFreshness, FreshnessError, type FreshnessOptions } from "./freshness";
 import { checkResultsHash, HashMismatchError, bytesToHex } from "./hash";
 import { checkPublishedPCR0, PCRVerificationError } from "./pcr";
+import { diffReports, type DiffEvent } from "./diff";
 import type { ShareResponse } from "./types";
 
-export type CheckName = "decode" | "chain" | "signature" | "freshness" | "hash" | "pcr0";
+export type CheckName = "decode" | "chain" | "signature" | "freshness" | "hash" | "pcr0" | "diff";
 
 export interface CheckOutcome {
   name: CheckName;
@@ -50,6 +51,50 @@ export interface VerifyOptions {
    * without needing to forge a signature from AWS's actual private key.
    */
   testOnlyTrustedRootDER?: Uint8Array;
+
+  /**
+   * Skips the freshness check (window + nonce shape stays unevaluated),
+   * marking it passed with an explanatory detail instead of running it.
+   * Freshness answers "is this recent enough to be the CURRENT state" —
+   * exactly the wrong question for a historical entry being verified for
+   * scope-drift comparison (verify/scope.ts) or the scope history
+   * timeline, where an entry being months old is expected, not
+   * suspicious. Every other check (chain, signature, hash, PCR0) still
+   * runs at full strength — this only narrows what "verified" means for
+   * a historical entry to "authentic", not "current".
+   */
+  skipFreshness?: boolean;
+}
+
+/**
+ * Computes a change set only after the caller has independently verified both
+ * snapshots with verifyShareResponse. This is the seventh buyer-page check:
+ * it does not accept an API-supplied diff, and any unexpected snapshot shape
+ * becomes a failed check with no changes rendered.
+ */
+export function recomputeAttestedDiff(previous: ShareResponse, current: ShareResponse): { events: DiffEvent[]; check: CheckOutcome } {
+  try {
+    const events = diffReports(previous, current);
+    return {
+      events,
+      check: {
+        name: "diff",
+        label: "Recompute changes from attested snapshots",
+        passed: true,
+        detail: `Locally compared ${events.length} transition${events.length === 1 ? "" : "s"} from two independently verified attested snapshots; the API did not supply this diff.`,
+      },
+    };
+  } catch (err) {
+    return {
+      events: [],
+      check: {
+        name: "diff",
+        label: "Recompute changes from attested snapshots",
+        passed: false,
+        detail: `Diff was not rendered: ${err instanceof Error ? err.message : String(err)}`,
+      },
+    };
+  }
 }
 
 /**
@@ -125,17 +170,26 @@ export async function verifyShareResponse(resp: ShareResponse, opts: VerifyOptio
   }
 
   // --- Check 4: freshness (timestamp window + nonce) ---
-  try {
-    const freshness = checkFreshness(document, { windowMs: opts.freshnessWindowMs, now: opts.now } satisfies FreshnessOptions);
+  if (opts.skipFreshness) {
     checks.push({
       name: "freshness",
       label: "Check freshness",
       passed: true,
-      detail: `Attested ${Math.round(freshness.ageMs / 1000)}s ago, within the ${Math.round(freshness.windowMs / 1000)}s window; carries a ${freshness.nonceLength}-byte nonce.`,
+      detail: "Skipped: this entry is being verified as historical evidence (authenticity only), not as the current state.",
     });
-  } catch (err) {
-    checks.push(failedOutcome("freshness", "Check freshness", err, FreshnessError));
-    return closedResult(checks, document, leafSubject, rootSubject);
+  } else {
+    try {
+      const freshness = checkFreshness(document, { windowMs: opts.freshnessWindowMs, now: opts.now } satisfies FreshnessOptions);
+      checks.push({
+        name: "freshness",
+        label: "Check freshness",
+        passed: true,
+        detail: `Attested ${Math.round(freshness.ageMs / 1000)}s ago, within the ${Math.round(freshness.windowMs / 1000)}s window; carries a ${freshness.nonceLength}-byte nonce.`,
+      });
+    } catch (err) {
+      checks.push(failedOutcome("freshness", "Check freshness", err, FreshnessError));
+      return closedResult(checks, document, leafSubject, rootSubject);
+    }
   }
 
   // --- Check 5: recompute SHA-384 over results, compare to user_data ---

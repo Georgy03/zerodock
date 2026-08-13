@@ -61,6 +61,12 @@ const (
 	portSageMakerUsEast2    = 8120
 	portCloudWatchLogsEast1 = 8121
 	portCloudWatchLogsEast2 = 8122
+	// Supabase's Management API is a single global HTTPS endpoint. The
+	// dynamic project Data API intentionally does NOT share this port: it is
+	// handled by the tightly scoped relay described in supabase_relay.go.
+	portSupabaseManagement  = 8123
+	portSecretsManagerEast1 = 8124
+	portSecretsManagerEast2 = 8125
 
 	// VsockPortCredentials is the dedicated port the enclave connects to
 	// ONCE at startup to receive its temporary AWS credentials from the
@@ -126,6 +132,12 @@ var hostnameToVsockPort = map[string]uint32{
 
 	"logs.us-east-1.amazonaws.com": portCloudWatchLogsEast1,
 	"logs.us-east-2.amazonaws.com": portCloudWatchLogsEast2,
+
+	"api.supabase.com": portSupabaseManagement,
+
+	// Vendor provider tokens remain in the vendor's own AWS Secrets Manager.
+	"secretsmanager.us-east-1.amazonaws.com": portSecretsManagerEast1,
+	"secretsmanager.us-east-2.amazonaws.com": portSecretsManagerEast2,
 }
 
 // vsockPortForHostname resolves both ordinary AWS service endpoints and S3's

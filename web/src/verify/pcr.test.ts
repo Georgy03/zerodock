@@ -27,6 +27,21 @@ describe("checkPublishedPCR0", () => {
     await expect(failure).rejects.toThrow("does not match published ZeroDock PCR0");
   });
 
+  it("accepts the immutable pre-tag v0.3.0 manifest when its tag manifest changed later", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ PCR0: "cd".repeat(48) }))
+      .mockResolvedValueOnce(jsonResponse({ PCR0: PCR0_HEX }));
+    const result = await checkPublishedPCR0(PCR0_BYTES, "v0.3.0", fetchMock);
+    expect(result.publishedPCR0).toBe(PCR0_HEX);
+    expect(result.sourceURL).toContain("0cf53a6741fb26cf7b13b9a2ab6e329dc615aee7");
+  });
+
+  it("accepts only the explicit immutable registry for a report that predates scanner_version", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ PCR0: PCR0_HEX }));
+    const result = await checkPublishedPCR0(PCR0_BYTES, undefined, fetchMock);
+    expect(result.sourceURL).toContain("77cdfcc3a962f06e7d638c50e403f01f645d452d");
+  });
+
   it.each([
     ["missing PCR0", {}, "must contain"],
     ["short PCR0", { PCR0: "ab" }, "96 hexadecimal"],
@@ -41,7 +56,7 @@ describe("checkPublishedPCR0", () => {
     await expect(checkPublishedPCR0(PCR0_BYTES, "v1.2.3", fetchMock)).rejects.toThrow("Could not fetch");
   });
 
-  it.each([undefined, "", "main", "dev", "../v1.2.3", "v1.2.3/pcrs.json", "https://evil.example/v1.2.3"])(
+  it.each(["", "main", "dev", "../v1.2.3", "v1.2.3/pcrs.json", "https://evil.example/v1.2.3"])(
     "rejects a non-release scanner version without fetching: %s",
     async (version) => {
       const fetchMock = vi.fn();

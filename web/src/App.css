@@ -897,3 +897,313 @@ select {
     to { opacity: 1; transform: translateY(0); }
   }
 }
+
+.onboard-page {
+  width: min(720px, calc(100% - 3rem));
+  margin: 0 auto;
+  padding: 3rem 0 4rem;
+}
+
+.onboard-page__header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+}
+
+.onboard-page__header p {
+  margin: 0 0 2rem;
+  color: var(--muted);
+}
+
+.onboard-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  background: var(--paper-bright);
+}
+
+.onboard-form label {
+  font-weight: 600;
+}
+
+.onboard-form input {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.onboard-form__hint {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.onboard-form__error {
+  color: var(--fail);
+  margin: 0.5rem 0 0;
+}
+
+.onboard-form button,
+.onboard-command button {
+  align-self: flex-start;
+  padding: 0.6rem 1.25rem;
+  background: var(--ink);
+  color: var(--paper-bright);
+  border: none;
+  cursor: pointer;
+}
+
+.onboard-form button:disabled {
+  background: var(--muted);
+  cursor: not-allowed;
+}
+
+.onboard-steps {
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.onboard-command {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.onboard-command pre {
+  width: 100%;
+  margin: 0;
+  padding: 1rem;
+  background: var(--mono-bg);
+  color: #e8e6df;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+.onboard-counter {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  background: var(--paper-bright);
+}
+
+.onboard-counter strong {
+  display: block;
+  font-size: 1.25rem;
+}
+
+.onboard-counter p {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+}
+
+.onboard-counter--waiting {
+  color: var(--muted);
+}
+
+.onboard-counter--done {
+  border-color: var(--pass);
+  background: var(--pass-soft);
+}
+
+.onboard-counter__badge {
+  display: inline-block;
+  margin-top: 0.4rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--error-soft);
+  color: var(--error);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.scope-section {
+  margin: 0 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.scope-section--loading,
+.scope-section--error {
+  padding: 1rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  background: var(--paper-bright);
+}
+
+.scope-section--error {
+  color: var(--error);
+}
+
+.scope-section__unverified {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--error);
+}
+
+.scope-events {
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  background: var(--paper-bright);
+}
+
+.scope-events strong {
+  display: block;
+  font-size: 1.05rem;
+  margin-bottom: 0.4rem;
+}
+
+.scope-events p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.scope-events--stable,
+.scope-events--baseline {
+  border-color: var(--pass);
+  background: var(--pass-soft);
+}
+
+.scope-events--notice {
+  border-color: var(--error);
+  background: var(--error-soft);
+}
+
+.scope-events--alert {
+  border-color: var(--fail);
+  background: var(--fail-soft);
+}
+
+.scope-events__list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.scope-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  background: var(--paper-bright);
+}
+
+.scope-picker label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.scope-picker select {
+  max-width: 18rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 0.45rem;
+}
+
+.change-groups { display: grid; gap: 0.75rem; }
+.change-groups__empty { margin: 0; color: var(--muted); }
+.change-group { border: 1px solid var(--line); background: var(--paper-bright); padding: 1rem 1.25rem; }
+.change-group--regression { border-left: 4px solid var(--fail); }
+.change-group--improvement { border-left: 4px solid var(--pass); }
+.change-group h3 { margin: 0 0 0.55rem; font-size: 0.88rem; }
+.change-group ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.55rem; }
+.change-group small { display: block; margin-top: 0.16rem; color: var(--muted); font-size: 0.71rem; }
+
+.scope-event code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.05rem 0.35rem;
+}
+
+.scope-timeline {
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  background: var(--paper-bright);
+}
+
+.scope-timeline__label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+}
+
+.scope-timeline__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.scope-timeline__direction {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.scope-timeline__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scope-timeline__point {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line);
+  min-width: 4.5rem;
+  position: relative;
+}
+
+.scope-timeline__point--dropped {
+  border-color: var(--fail);
+  background: var(--fail-soft);
+}
+
+.scope-timeline__point--no-org {
+  min-width: 8.5rem;
+  border-style: dashed;
+  background: #f2f1ec;
+}
+
+.scope-timeline__ratio {
+  font-weight: 600;
+}
+
+.scope-timeline__point--no-org .scope-timeline__ratio {
+  max-width: 7.5rem;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.scope-timeline__date {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.scope-timeline__flag {
+  position: absolute;
+  top: -0.6rem;
+  color: var(--fail);
+  font-size: 0.8rem;
+}

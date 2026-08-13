@@ -3,6 +3,11 @@
 # AWS Organization. Run from the management account after enabling trusted
 # access for CloudFormation StackSets. Service-managed permissions avoid
 # creating broad custom StackSet execution roles in every member account.
+#
+# This is the manual, two-step path kept for operators who already have a
+# ZeroDockScannerRole in place. The /onboard flow instead uses
+# deploy/onboard.yaml, a single CloudFormation stack that creates that role
+# AND this StackSet together, as one copy-paste command.
 
 set -euo pipefail
 
@@ -12,10 +17,11 @@ SOURCE_POLICY_FILE="$SCRIPT_DIR/scanner-assume-member-policy.json"
 STACK_SET_NAME="${STACK_SET_NAME:-ZeroDockScannerMemberRole}"
 STACK_SET_REGION="${AWS_REGION:-us-east-1}"
 SCANNER_ACCOUNT_ID="${1:-${SCANNER_ACCOUNT_ID:-}}"
+TENANT_ID="${2:-${TENANT_ID:-}}"
 SCANNER_ROLE_NAME="${SCANNER_ROLE_NAME:-ZeroDockScannerRole}"
 
-if [ -z "$SCANNER_ACCOUNT_ID" ]; then
-	echo "usage: $0 <scanner-account-id>" >&2
+if [ -z "$SCANNER_ACCOUNT_ID" ] || [ -z "$TENANT_ID" ]; then
+	echo "usage: $0 <scanner-account-id> <tenant-id>" >&2
 	exit 2
 fi
 if [[ ! "$SCANNER_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
@@ -49,7 +55,7 @@ aws cloudformation create-stack-set \
 	--stack-set-name "$STACK_SET_NAME" \
 	--description "ZeroDock read-only SecurityAudit member-account role" \
 	--template-body "file://$TEMPLATE_FILE" \
-	--parameters "ParameterKey=ScannerAccountId,ParameterValue=$SCANNER_ACCOUNT_ID" \
+	--parameters "ParameterKey=ScannerAccountId,ParameterValue=$SCANNER_ACCOUNT_ID" "ParameterKey=TenantId,ParameterValue=$TENANT_ID" \
 	--permission-model SERVICE_MANAGED \
 	--auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false \
 	--managed-execution Active=true \

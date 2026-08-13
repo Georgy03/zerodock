@@ -21,6 +21,7 @@ FROM golang:1.25-bookworm AS builder
 # keeps ordinary local builds usable, but the browser deliberately refuses to
 # treat it as a published release tag.
 ARG SCANNER_VERSION=dev
+ARG SUPABASE_SECRET_ARN=
 
 WORKDIR /src
 
@@ -45,6 +46,11 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 # surface to reason about, and our statically-linked, CGO-free binary
 # doesn't need a normal Linux userspace to run.
 FROM scratch
+
+ARG SUPABASE_SECRET_ARN
+# This is an ARN, never the Supabase token. The scanner fetches the token from
+# the vendor's own AWS Secrets Manager only after it starts inside the enclave.
+ENV ZERODOCK_SUPABASE_SECRET_ARN=${SUPABASE_SECRET_ARN}
 
 # TLS root certificates, so the scanner can validate AWS's HTTPS
 # certificates once it has network access (not yet — that's a later

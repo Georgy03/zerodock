@@ -1,0 +1,110 @@
+name: Release
+
+# Triggered by pushing an immutable version tag (v1.2.3). This is the ONLY
+# path that produces a published pcrs.json / GitHub attestation for a
+# given tag — nothing here reacts to branch pushes.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+# Least-privilege by default; individual jobs/steps opt back into what
+# they specifically need (id-token for Sigstore/attest-build-provenance,
+# contents:write for the GitHub Release).
+permissions:
+  contents: read
+
+jobs:
+  build-and-attest:
+    # NOT ubuntu-latest. Building a real EIF requires nitro-cli and actual
+    # Nitro Enclave-capable EC2 hardware (see the Makefile's `eif` target
+    # and REPRODUCE.md) — GitHub-hosted runners have neither. This
+    # workflow only runs at all if you've registered a self-hosted runner
+    # on Nitro-capable hardware with this label; it will simply never
+    # trigger otherwise, rather than silently falling back to a fake or
+    # skipped measurement.
+    runs-on: [self-hosted, nitro]
+    permissions:
+      contents: write # to create the GitHub Release and attach assets
+      id-token: write # to mint the Sigstore identity attest-build-provenance needs
+      attestations: write # to publish the provenance attestation to this repo
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Resolve base image digest
+        id: base-image
+        # Resolves whatever tag deploy/Dockerfile's FROM line currently
+        # names to the immutable digest actually pulled for this build,
+        # so pcrs.json records exactly what was used — not a mutable tag
+        # that could point at different bytes tomorrow.
+        run: |
+          set -euo pipefail
+          image=$(awk '/^FROM /{print $2; exit}' deploy/Dockerfile)
+          docker pull "$image"
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$image")
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Build EIF
+        run: make eif SCANNER_VERSION="${{ github.ref_name }}"
+
+      - name: Render this build's own measurements
+        # pcrs.json at the repo root is committed BY A HUMAN before
+        # tagging (see REPRODUCE.md), the same way the browser verifier
+        # trusts it: as a value published and reviewed ahead of time, not
+        # something this workflow is allowed to author after the fact — a
+        # workflow that could rewrite the tagged commit's published PCR0
+        # is exactly the compromised-single-source-of-truth problem
+        # web/src/verify/pcr.ts's design note warns about. This step only
+        # renders what THIS independent rebuild measured, to a separate
+        # file, so the next step can compare the two.
+        run: |
+          python3 deploy/render-pcrs.py \
+            --measurements scanner.eif.measurements.json \
+            --commit "${{ github.sha }}" \
+            --base-image-digest "${{ steps.base-image.outputs.digest }}" \
+            --scanner-version "${{ github.ref_name }}" \
+            --nitro-cli-version "$(nitro-cli --version)" \
+            --go-version "$(go version)" \
+            --output rebuilt-pcrs.json
+
+      - name: Verify reproducibility against the committed pcrs.json
+        run: |
+          set -euo pipefail
+          if [ ! -f pcrs.json ]; then
+            echo "::error::No pcrs.json committed at this tag. Publish it (see REPRODUCE.md) before tagging a release."
+            exit 1
+          fi
+          committed=$(python3 -c "import json; print(json.load(open('pcrs.json'))['PCR0'])")
+          rebuilt=$(python3 -c "import json; print(json.load(open('rebuilt-pcrs.json'))['PCR0'])")
+          if [ "$committed" != "$rebuilt" ]; then
+            echo "::error::This runner's independent rebuild measured PCR0=$rebuilt, but the committed pcrs.json says PCR0=$committed. See REPRODUCE.md."
+            exit 1
+          fi
+          echo "Independent rebuild on this runner reproduced the committed PCR0."
+
+      - name: Generate build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: scanner.eif
+
+      - name: Upload EIF as a release asset
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scanner-eif
+          path: scanner.eif
+          retention-days: 90
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          files: |
+            scanner.eif
+            pcrs.json
+          generate_release_notes: true

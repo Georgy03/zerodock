@@ -56,6 +56,9 @@ ENDPOINTS=(
 	"8120:api.sagemaker.us-east-2.amazonaws.com"
 	"8121:logs.us-east-1.amazonaws.com"
 	"8122:logs.us-east-2.amazonaws.com"
+	"8123:api.supabase.com"
+	"8124:secretsmanager.us-east-1.amazonaws.com"
+	"8125:secretsmanager.us-east-2.amazonaws.com"
 )
 
 pids=()

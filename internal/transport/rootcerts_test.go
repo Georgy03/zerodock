@@ -6,13 +6,13 @@ import (
 	"testing"
 )
 
-// TestNewRootCAPool_LoadsAllFourRoots confirms every embedded PEM file
+// TestNewRootCAPool_LoadsAllRoots confirms every embedded PEM file
 // parses successfully and ends up in the pool. x509.CertPool doesn't
 // expose a simple "how many certs are in here" count, so we check via
 // Subjects() (deprecated but still functional and the simplest way to get
 // a count without re-parsing the PEMs ourselves) as a basic sanity check
 // that all four made it in, not zero or some smaller number.
-func TestNewRootCAPool_LoadsAllFourRoots(t *testing.T) {
+func TestNewRootCAPool_LoadsAllRoots(t *testing.T) {
 	pool, err := NewRootCAPool()
 	if err != nil {
 		t.Fatalf("NewRootCAPool: %v", err)
@@ -23,8 +23,8 @@ func TestNewRootCAPool_LoadsAllFourRoots(t *testing.T) {
 
 	//nolint:staticcheck // Subjects() is deprecated but there's no
 	// simpler way to sanity-check a cert count in a *x509.CertPool.
-	if got := len(pool.Subjects()); got != 4 {
-		t.Errorf("pool has %d certificates, want 4", got)
+	if got := len(pool.Subjects()); got != 5 {
+		t.Errorf("pool has %d certificates, want 5", got)
 	}
 }
 
@@ -42,6 +42,7 @@ func TestEmbeddedRoots_AreValidSelfSignedCACerts(t *testing.T) {
 		"AmazonRootCA2.pem": amazonRootCA2,
 		"AmazonRootCA3.pem": amazonRootCA3,
 		"AmazonRootCA4.pem": amazonRootCA4,
+		"GTSRootR4.pem":     gtsRootR4,
 	}
 
 	for name, pemBytes := range roots {

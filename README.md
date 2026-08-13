@@ -244,6 +244,60 @@ The report's `scanned_regions` is the intersection of what you asked for and
 what AWS actually reports as enabled for the account — never broader than
 either one, so the report can't claim coverage it didn't have.
 
+### Supabase provider
+
+Enable the Supabase provider with the ARN of a **vendor-owned** AWS Secrets
+Manager secret containing an organization-scoped Supabase Management API
+token:
+
+```bash
+go run ./cmd/scanner --mock-attest \
+  --supabase-secret-arn arn:aws:secretsmanager:us-east-1:123456789012:secret:zerodock-supabase
+```
+
+For an EIF build, pass the ARN—not the token—at build time:
+
+```bash
+make eif SCANNER_VERSION=v0.4.0 SUPABASE_SECRET_ARN=arn:aws:secretsmanager:us-east-1:123456789012:secret:zerodock-supabase
+```
+
+ZeroDock stores and receives only the secret ARN. The scanner fetches the
+token directly from Secrets Manager inside the enclave over its existing
+AWS-vsock path, holds it only in memory for the scan, and never logs,
+persists, or places it in the report. A token that cannot enumerate
+`/v1/organizations` and `/v1/projects` is rejected: project-scoped access can
+hide projects and therefore cannot establish a trustworthy denominator.
+The scanner's AWS role needs a deliberately narrow
+`secretsmanager:GetSecretValue` allow statement for that one ARN;
+`SecurityAudit` does not grant secret-value reads by itself.
+
+The attested report contains `supabase_organization_id`, `projects_listed`,
+and `projects_scanned`. Supabase checks are:
+
+- `supabase.ssl_enforcement` — PostgreSQL SSL enforcement;
+- `supabase.network_restrictions` — configured and applied database IP allowlists;
+- `supabase.auth_config` — MFA, JWT-expiry, and email-confirmation configuration;
+- `supabase.security_advisor` — Supabase-provided security-advisor lints; and
+- `supabase.rls_probe` — an actively probed public Data API check.
+
+`supabase.rls_probe` fetches each project's anon/publishable Data API key into
+enclave memory only, enumerates tables exposed through the Data API from the
+Management API, then queries each table through the real public
+`https://<project-ref>.supabase.co/rest/v1/` surface. A returned row is a high
+finding. A clean result says only: “anon role returned no rows across N tables
+exposed via the Data API.” It does **not** claim full data isolation: tables
+outside configured Data API schemas are not exposed and are therefore not
+probed.
+
+The Data API path is intentionally unlike the fixed AWS/Supabase Management
+vsock endpoints. The parent-side relay validates the exact 20-character
+project-ref hostname, permits HTTPS/443 only, resolves once, rejects private
+or non-public IP addresses, connects to that validated numeric result (DNS
+rebinding protection), caps connections, and logs destinations. The enclave
+independently checks the same hostname format and permits only refs it
+enumerated for this vendor organization. TLS still terminates inside the
+enclave; the relay forwards opaque encrypted bytes.
+
 ### AI/ML evidence boundary
 
 The Bedrock and SageMaker checks cover AI services and resources running in
@@ -334,7 +388,14 @@ code, and create/push the exact same tag used above. The browser fetches:
 https://raw.githubusercontent.com/Georgy03/zerodock/v0.1.0/pcrs.json
 ```
 
-It never reads measurements from `main`. The default `SCANNER_VERSION=dev`
+It never reads measurements from `main`. **Release-measurement retention is
+an audit-trail policy:** every tagged version's `pcrs.json` must remain
+reachable forever, tags must never be reused or moved, and a corrected
+measurement gets a new version tag. The browser has a narrowly-scoped registry
+of two pre-policy immutable commit manifests solely to keep the first
+historical reports verifiable: the pre-version scanner report and the original
+v0.3.0 measurement that was produced before that tag was finalized. New
+releases must not add to that exception list. The default `SCANNER_VERSION=dev`
 keeps local builds convenient, but deliberately cannot pass the browser's
 published-release PCR check.
 
@@ -499,6 +560,10 @@ genuine), and serves them back out to buyers via a share link.
 - **`GET /v1/share/{token}/history`** — every verdict for that token, newest
   attested first (`?limit=` to cap the count; defaults and a hard ceiling
   are enforced server-side regardless). Same 404/410 rules as above.
+- **`GET /v1/share/{token}/history/{check_id}`** — compact per-account status
+  transitions for one control, oldest to newest. This is an integration
+  convenience index; the buyer page still derives its displayed delta from
+  the complete, independently verified attested reports returned by `/history`.
 - **`POST /v1/share/{token}/questionnaires/autofill`** — accepts a multipart
   upload named `questionnaire` (`.xlsx` or `.csv`). It uses the newest
   attested verdict behind that token, returns the completed file in its
@@ -657,18 +722,129 @@ from that column, not a replacement for it.
 | `BUYER_BASE_URL` | yes | Public browser-verifier origin written into questionnaire evidence links |
 | `ZERODOCK_ALLOW_MOCK_ATTESTATION` | no (default `false`) | Accept verified-but-mock attestations |
 | `QUESTIONNAIRE_MAPPINGS_FILE` | no | Replace embedded questionnaire mappings, including per-account overrides |
+| `ZERODOCK_SCANNER_ACCOUNT_ID` | no | Enables `/v1/onboard`; ZeroDock's own AWS account ID, embedded as the trust-policy principal in generated onboarding commands |
+| `ZERODOCK_ONBOARD_TEMPLATE_URL` | required if the above is set | Where `deploy/onboard.yaml` is published, used as the onboarding command's `--template-url` |
 
 ```bash
 # apply the schema once, as a privileged/owner role
 psql "$ADMIN_DATABASE_URL" -f migrations/0001_init.sql
 psql "$ADMIN_DATABASE_URL" -f migrations/0002_scanner_version.sql
 psql "$ADMIN_DATABASE_URL" -f migrations/0003_organization_scope.sql
+psql "$ADMIN_DATABASE_URL" -f migrations/0004_onboarding.sql
+psql "$ADMIN_DATABASE_URL" -f migrations/0005_account_history.sql
 
 # run the server
 DATABASE_URL="postgres://zerodock_app:...@host:5432/zerodock" \
 BUYER_BASE_URL="https://verify.zerodock.example" \
 go run ./cmd/api
 ```
+
+### Onboarding
+
+`web`'s `/onboard` route walks a vendor through connecting an AWS account:
+enter an AWS account ID, get back one copy-paste
+`aws cloudformation create-stack` command (with the tenant ID and
+ZeroDock's own account ID pre-filled), and the page then polls
+`GET /v1/onboard/{tenant}/status` every few seconds for a live "N of M
+accounts connected" counter.
+
+That command deploys `deploy/onboard.yaml`, a single CloudFormation
+stack that:
+
+- Creates `ZeroDockScannerRole` directly in the account it's run in —
+  needed because service-managed CloudFormation StackSets can never
+  deploy stack instances into their own launch account, and a
+  management account is exactly that account.
+- Looks up the AWS Organization's root ID via a small inline Lambda
+  custom resource (`organizations:ListRoots`), so the whole flow stays
+  one command instead of "run this, copy an ID, run that."
+- Deploys `deploy/member-role.yaml` account-wide via a service-managed
+  `AWS::CloudFormation::StackSet`, auto-deploying to new accounts as
+  they're added to the org.
+
+Both roles' trust policies require an `sts:ExternalId` matching the
+tenant ID ZeroDock generated, so a credential leaked from one tenant's
+setup can't be replayed to assume into a different tenant's roles.
+`GET /v1/onboard/{tenant}/status` computes its answer live on every
+call — assume into `ZeroDockScannerRole`, call
+`organizations:ListAccounts` (so the denominator appears as soon as
+that role exists, before every member account has finished connecting),
+then fan out `AssumeRole` probes into each member account's
+`ZeroDockScannerMemberRole` to count how many have actually connected.
+An account with no AWS Organization at all falls back to a single
+connected account, explicitly labeled "unverified scope" in the UI —
+ZeroDock has no way to confirm there isn't a wider estate it can't see.
+
+### Scope drift
+
+The account boundary a scan covers is not static — AWS Organizations can
+grow a new account with no scanner role deployed to it yet, and "18 of 18
+accounts connected" quietly becoming "18 of 19" is coverage silently
+dropping even though nothing about the 18 already-connected accounts
+changed. ZeroDock treats that as a first-class, prominently surfaced
+event, not a line buried in `findings`.
+
+`internal/scope.Detect` (mirrored field-for-field by
+`web/src/verify/scope.ts`'s `detectScopeEvents`) compares two scans'
+attested `accounts_listed`/`accounts_scanned` and reports three kinds of
+transition: an account appearing that wasn't listed before
+(`account_added`, with whether the scanner role is already present),
+one disappearing (`account_removed`), and the scanned/listed **ratio**
+dropping (`coverage_decreased` — checked by ratio, not raw counts,
+specifically to catch the 18/18 → 18/19 case).
+
+`internal/store.CreateVerdict` runs this comparison on every ingest and
+writes one `account_history` row per listed account (migration
+`0005_account_history.sql`), carrying `first_seen_at` forward across
+scans so a temporarily-removed account that reappears doesn't look
+newly discovered.
+
+**Critically, the buyer page never trusts a server-computed diff.**
+`ScopeSection.tsx` fetches `GET /v1/share/{token}/history`, independently
+re-verifies EVERY entry's attestation client-side (chain, signature,
+results hash, published PCR0 — freshness is deliberately skipped for
+historical entries via `verifyShareResponse`'s `skipFreshness` option,
+since "is this scan old" is the wrong question for something being used
+as historical evidence), and only then runs `detectScopeEvents` over two
+already-verified payloads. `account_history` exists purely so the server
+can answer "when was this first seen" cheaply — it is not the source of
+truth the page renders from. The result appears as its own `scope_events`
+section above the control list, plus a compact timeline of the last 10
+verified scans with their coverage ratio, flagging any scan where it
+dropped.
+
+### Attested change detection
+
+`internal/diff.Reports` and its field-for-field browser mirror,
+`web/src/verify/diff.ts`, compare two attested snapshots deterministically.
+For each control and account observed in both scans they report status
+transitions (`pass → fail`, `fail → pass`, and error/not-in-use changes), new
+findings, and resolved findings. A newly introduced scanner control is not
+treated as a regression against a report produced before that control existed;
+account additions/removals remain explicit scope events.
+
+The buyer page calls this its seventh verification check: it first verifies
+both historical COSE documents, then recomputes the delta locally and refuses
+to render changes if that work fails. It groups regressions, neutral scope
+changes, and resolved items, with the later report's attested timestamp as the
+first observation time. Buyers can pick any two verified scans for a date-range
+delta and see the 10-scan coverage-ratio timeline. The UI states the intended
+positioning plainly: a SOC 2 describes what auditors observed during an audit
+period; ZeroDock adds evidence of what has changed since, rather than replacing
+the SOC 2.
+
+### Reproducibility
+
+Every enclave image ZeroDock ships is independently rebuildable from
+this repository, and its `pcrs.json` PCR0 is verifiable against your own
+rebuild — see [REPRODUCE.md](REPRODUCE.md) for exact steps, pinned
+toolchain versions, and `deploy/verify-reproducibility.sh`, a standalone
+script that does the rebuild-and-compare for you.
+`.github/workflows/release.yml` runs the same check as a release gate on
+a self-hosted, Nitro-capable runner (real EIF builds need actual Nitro
+Enclave hardware GitHub-hosted runners don't have), and publishes a
+[Sigstore build-provenance attestation](https://github.com/actions/attest-build-provenance)
+for the EIF alongside it.
 
 ## Tests
 

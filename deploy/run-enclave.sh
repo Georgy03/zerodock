@@ -55,6 +55,13 @@ echo "run-enclave.sh: starting vsock-proxy processes..."
 "$SCRIPT_DIR/start-proxies.sh" &
 helper_pids+=("$!")
 
+# Supabase project Data API hosts are discovered at scan time. This relay is
+# deliberately separate from the fixed vsock-proxy allowlist and validates a
+# constrained per-project capability before relaying opaque TLS bytes.
+echo "run-enclave.sh: starting scoped Supabase Data API relay..."
+python3 "$SCRIPT_DIR/supabase-data-relay.py" &
+helper_pids+=("$!")
+
 echo "run-enclave.sh: starting credential server..."
 python3 "$SCRIPT_DIR/serve-credentials.py" &
 helper_pids+=("$!")

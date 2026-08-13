@@ -57,3 +57,11 @@ allowlist:
 
   - {address: logs.us-east-1.amazonaws.com, port: 443}
   - {address: logs.us-east-2.amazonaws.com, port: 443}
+
+  # Supabase Management API. Project Data API calls use the separate,
+  # per-scan capability-scoped relay; they are deliberately not wildcarded
+  # here.
+  - {address: api.supabase.com, port: 443}
+
+  - {address: secretsmanager.us-east-1.amazonaws.com, port: 443}
+  - {address: secretsmanager.us-east-2.amazonaws.com, port: 443}

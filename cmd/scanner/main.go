@@ -23,11 +23,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -37,6 +39,7 @@ import (
 	"github.com/Georgy03/zerodock/internal/checks"
 	"github.com/Georgy03/zerodock/internal/providers"
 	"github.com/Georgy03/zerodock/internal/report"
+	"github.com/Georgy03/zerodock/internal/supabase"
 	"github.com/Georgy03/zerodock/internal/transport"
 )
 
@@ -54,6 +57,7 @@ func main() {
 	// without one either.
 	mockAttest := flag.Bool("mock-attest", false, "use the mock attester and a normal network connection, for local development outside an enclave (default: real NSM attester + vsock networking)")
 	regionsFlag := flag.String("regions", "us-east-1,us-east-2", "comma-separated AWS regions to scan")
+	supabaseSecretARN := flag.String("supabase-secret-arn", os.Getenv("ZERODOCK_SUPABASE_SECRET_ARN"), "vendor-owned AWS Secrets Manager ARN containing an organization-scoped Supabase Management API token")
 	flag.Parse()
 	requestedRegions, err := parseRegions(*regionsFlag)
 	if err != nil {
@@ -61,7 +65,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(*mockAttest, requestedRegions); err != nil {
+	if err := run(*mockAttest, requestedRegions, *supabaseSecretARN); err != nil {
 		// Print errors to STDERR (the "error output" stream) rather
 		// than mixing them into the JSON we print on success, and
 		// exit with a non-zero status code so scripts calling this
@@ -74,7 +78,7 @@ func main() {
 // run does the actual work. It's kept separate from main() so it can
 // return a normal Go error instead of needing to call os.Exit() itself —
 // that keeps error-handling in exactly one place (main).
-func run(mockAttest bool, requestedRegions []string) error {
+func run(mockAttest bool, requestedRegions []string, supabaseSecretARN string) error {
 	ctx := context.Background()
 
 	// Open the selected attester before making any AWS calls. In an
@@ -302,6 +306,12 @@ func run(mockAttest bool, requestedRegions []string) error {
 		rep.Checks[check.ID] = output
 	}
 
+	if supabaseSecretARN != "" {
+		if err := scanSupabase(ctx, cfg, httpClient, dialer, supabaseSecretARN, &rep); err != nil {
+			return err
+		}
+	}
+
 	// Turn the attested claim (which account, whether we could even
 	// confirm that, whether the clock was trustworthy, and every check's
 	// result) into JSON bytes, and take a SHA-384 fingerprint (hash) of
@@ -375,6 +385,57 @@ func run(mockAttest bool, requestedRegions []string) error {
 		}
 	}
 
+	return nil
+}
+
+// scanSupabase is deliberately opt-in because its long-lived Management API
+// token lives in the vendor's own AWS Secrets Manager. ZeroDock receives only
+// the ARN; the value is fetched over the existing encrypted AWS path directly
+// into enclave memory and is never included in a report, log, or database.
+func scanSupabase(ctx context.Context, cfg aws.Config, managementHTTP *http.Client, dialer transport.Dialer, secretARN string, rep *report.Report) error {
+	token, err := providers.FetchVendorSecret(ctx, cfg, secretARN)
+	if err != nil {
+		return fmt.Errorf("fetch Supabase Management API token: %w", err)
+	}
+	defer func() { token = "" }()
+	management := providers.NewSupabaseClient(managementHTTP, token)
+	scope, projects, err := management.EnumerateSupabaseScope(ctx)
+	if err != nil {
+		return fmt.Errorf("enumerate Supabase organization scope: %w", err)
+	}
+	if len(scope.OrganizationIDs) != 1 {
+		return fmt.Errorf("Supabase token spans %d organizations; configure one organization-scoped token per scan", len(scope.OrganizationIDs))
+	}
+	rep.SupabaseOrganizationID = scope.OrganizationIDs[0]
+	rep.ProjectsListed = append([]string(nil), scope.Projects...)
+
+	var dataDialer transport.Dialer
+	if vsock, ok := dialer.(*transport.VsockDialer); ok {
+		dataDialer = transport.NewSupabaseDataDialer(vsock, scope.Projects)
+	} else {
+		dataDialer = transport.NewTCPDialer()
+	}
+	dataHTTP, err := transport.NewHTTPClient(dataDialer)
+	if err != nil {
+		return fmt.Errorf("build Supabase Data API client: %w", err)
+	}
+	outputs := supabase.Scan(ctx, management, dataHTTP, projects)
+	for id, output := range outputs {
+		rep.Checks[id] = report.CheckOutput{Title: output.Title, Tier: output.Tier, Accounts: output.Accounts, Result: aggregateAccountResults(output.Accounts)}
+	}
+	for _, project := range scope.Projects {
+		complete := true
+		for _, output := range outputs {
+			if output.Accounts[project].Status == checks.StatusError {
+				complete = false
+				break
+			}
+		}
+		if complete {
+			rep.ProjectsScanned = append(rep.ProjectsScanned, project)
+		}
+	}
+	sort.Strings(rep.ProjectsScanned)
 	return nil
 }
 

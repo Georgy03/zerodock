@@ -3,10 +3,12 @@
 scan.json
 /report-*.json
 *.eif
+*.measurements.json
 /reports/
 
 # Local build artifacts
 /build/
+*.log
 
 # Byte-compiled Python (deploy/serve-credentials.py)
 __pycache__/

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"sort"
 
 	"github.com/Georgy03/zerodock/internal/store"
 )
@@ -19,6 +20,7 @@ type fakeStore struct {
 	revoked         map[string]bool   // token -> revoked
 	verdictsByToken map[string][]store.Verdict
 	scanIDs         map[string]bool
+	onboardings     map[string]store.Onboarding
 	nextID          int64
 
 	// forceErr, if set, is returned by every method — used to test the
@@ -32,6 +34,7 @@ func newFakeStore() *fakeStore {
 		revoked:         make(map[string]bool),
 		verdictsByToken: make(map[string][]store.Verdict),
 		scanIDs:         make(map[string]bool),
+		onboardings:     make(map[string]store.Onboarding),
 	}
 }
 
@@ -121,10 +124,35 @@ func (f *fakeStore) VerdictHistory(_ context.Context, token string, limit int) (
 		return nil, f.forceErr
 	}
 	vs := append([]store.Verdict(nil), f.verdictsByToken[token]...)
+	sort.Slice(vs, func(i, j int) bool { return vs[i].AttestedAt.After(vs[j].AttestedAt) })
 	if limit > 0 && limit < len(vs) {
 		vs = vs[:limit]
 	}
 	return vs, nil
+}
+
+func (f *fakeStore) CreateOnboarding(_ context.Context, customerAccountID string) (store.Onboarding, error) {
+	if f.forceErr != nil {
+		return store.Onboarding{}, f.forceErr
+	}
+	tenantID := "tenant-" + customerAccountID
+	ob := store.Onboarding{TenantID: tenantID, CustomerAccountID: customerAccountID}
+	if f.onboardings == nil {
+		f.onboardings = make(map[string]store.Onboarding)
+	}
+	f.onboardings[tenantID] = ob
+	return ob, nil
+}
+
+func (f *fakeStore) GetOnboarding(_ context.Context, tenantID string) (store.Onboarding, error) {
+	if f.forceErr != nil {
+		return store.Onboarding{}, f.forceErr
+	}
+	ob, ok := f.onboardings[tenantID]
+	if !ok {
+		return store.Onboarding{}, store.ErrNotFound
+	}
+	return ob, nil
 }
 
 // addSubjectOnly registers a token with no verdicts yet, so tests can

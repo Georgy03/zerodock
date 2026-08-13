@@ -1,0 +1,215 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  ZeroDock onboarding: one stack that (1) creates the scanner role directly
+  in this account, since service-managed StackSets cannot deploy stack
+  instances to the account they're launched from, and (2) auto-deploys
+  deploy/member-role.yaml to every other account in the organization via a
+  service-managed StackSet targeted at the organization root. Run this once,
+  from the AWS Organizations management account (or a delegated
+  administrator), with trusted access for CloudFormation StackSets already
+  enabled — see deploy/deploy-stackset.sh's activate-organizations-access
+  step, which this template does not perform for you because that action
+  itself requires org-management permissions this template cannot assume it
+  has.
+
+Parameters:
+  ScannerAccountId:
+    Type: String
+    Description: >-
+      ZeroDock's own AWS account ID. This is the account whose scanner
+      enclave assumes into the roles this stack creates; it is not this
+      account.
+    AllowedPattern: "^[0-9]{12}$"
+  TenantId:
+    Type: String
+    Description: >-
+      The tenant identifier ZeroDock generated for this vendor at
+      /onboard. Enforced as an sts:ExternalId condition on both roles this
+      stack creates (directly here, and via the nested StackSet), so a
+      credential leaked from one ZeroDock tenant cannot be replayed to
+      assume into a different tenant's roles.
+    MinLength: 8
+
+Resources:
+  # Every other account in the org gets its role via a service-managed
+  # StackSet; this account is the one documented exception, so its role is
+  # created directly by this same template instead.
+  ZeroDockScannerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ZeroDockScannerRole
+      Description: >-
+        Read-only role assumed by the ZeroDock scanner enclave directly in
+        the organization's management account, and used to enumerate and
+        fan out into every member account's ZeroDockScannerMemberRole.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: TrustZeroDockScannerAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${ScannerAccountId}:root"
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref TenantId
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/SecurityAudit"
+      Policies:
+        - PolicyName: ZeroDockOrganizationEnumeration
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Read-only Organizations calls needed to compute the "N of M
+              # accounts connected" denominator. No write/management action.
+              - Sid: EnumerateOrganization
+                Effect: Allow
+                Action:
+                  - organizations:DescribeOrganization
+                  - organizations:ListAccounts
+                  - organizations:ListRoots
+                Resource: "*"
+        - PolicyName: ZeroDockAssumeMemberAuditRoles
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # SecurityAudit deliberately does not grant sts:AssumeRole, so
+              # the fan-out into member accounts needs this narrow addition.
+              - Sid: AssumeZeroDockMemberAuditRoles
+                Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Sub "arn:${AWS::Partition}:iam::*:role/ZeroDockScannerMemberRole"
+
+  # AWS::CloudFormation::StackSet needs the organization root ID as a
+  # deployment target, and CloudFormation has no pseudo-parameter for it.
+  # This tiny custom resource looks it up at deploy time via
+  # organizations:ListRoots so the whole flow stays one copy-paste command
+  # instead of a "run this, copy the root ID, run that" two-step.
+  OrgRootLookupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ListOrganizationRoots
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: organizations:ListRoots
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  OrgRootLookupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt OrgRootLookupRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+
+          def handler(event, context):
+              if event["RequestType"] == "Delete":
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
+              try:
+                  org = boto3.client("organizations", region_name="us-east-1")
+                  roots = org.list_roots()["Roots"]
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {"RootId": roots[0]["Id"]})
+              except Exception as exc:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(exc)})
+
+  OrgRootLookup:
+    Type: Custom::OrganizationRoot
+    Properties:
+      ServiceToken: !GetAtt OrgRootLookupFunction.Arn
+
+  # Deploys deploy/member-role.yaml to every account in the org EXCEPT this
+  # one, which service-managed StackSets always exclude when launched from
+  # the management account. TenantId flows through as a StackSet parameter
+  # so the member role's trust policy carries the same ExternalId condition.
+  ZeroDockMemberRoleStackSet:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      StackSetName: ZeroDockScannerMemberRole
+      Description: ZeroDock read-only SecurityAudit member-account role.
+      PermissionModel: SERVICE_MANAGED
+      AutoDeployment:
+        Enabled: true
+        RetainStacksOnAccountRemoval: false
+      ManagedExecution:
+        Active: true
+      Capabilities:
+        - CAPABILITY_NAMED_IAM
+      Parameters:
+        - ParameterKey: ScannerAccountId
+          ParameterValue: !Ref ScannerAccountId
+        - ParameterKey: TenantId
+          ParameterValue: !Ref TenantId
+      StackInstancesGroup:
+        - DeploymentTargets:
+            OrganizationalUnitIds:
+              - !GetAtt OrgRootLookup.RootId
+          Regions:
+            - !Ref "AWS::Region"
+      TemplateBody: |
+        AWSTemplateFormatVersion: "2010-09-09"
+        Description: >-
+          ZeroDock's dedicated read-only member-account role. Deployed by the
+          parent onboarding stack's StackSet; kept in sync with
+          deploy/member-role.yaml by hand, since AWS::CloudFormation::StackSet
+          requires an inline TemplateBody or an S3 TemplateURL, not a local
+          file reference.
+        Parameters:
+          ScannerAccountId:
+            Type: String
+            AllowedPattern: "^[0-9]{12}$"
+          TenantId:
+            Type: String
+            MinLength: 8
+        Resources:
+          ZeroDockScannerMemberRole:
+            Type: AWS::IAM::Role
+            Properties:
+              RoleName: ZeroDockScannerMemberRole
+              Description: Read-only role assumed by the ZeroDock scanner enclave.
+              MaxSessionDuration: 3600
+              AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                  - Sid: TrustZeroDockScannerAccount
+                    Effect: Allow
+                    Principal:
+                      AWS: !Sub "arn:${AWS::Partition}:iam::${ScannerAccountId}:root"
+                    Action: sts:AssumeRole
+                    Condition:
+                      StringEquals:
+                        sts:ExternalId: !Ref TenantId
+              ManagedPolicyArns:
+                - !Sub "arn:${AWS::Partition}:iam::aws:policy/SecurityAudit"
+        Outputs:
+          MemberRoleArn:
+            Value: !GetAtt ZeroDockScannerMemberRole.Arn
+
+Outputs:
+  ScannerRoleArn:
+    Description: Role ARN the scanner assumes directly in this (management) account.
+    Value: !GetAtt ZeroDockScannerRole.Arn
+  OrganizationRootId:
+    Description: Organization root ID the member-role StackSet was targeted at.
+    Value: !GetAtt OrgRootLookup.RootId

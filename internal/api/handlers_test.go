@@ -419,6 +419,59 @@ func TestHandleHistory_ReturnsAllVerdictsForToken(t *testing.T) {
 	}
 }
 
+func TestHandleControlHistory_ReturnsOnlyStatusTransitions(t *testing.T) {
+	sub, outcome := validSubmission(t)
+	fs := newFakeStore()
+	s := newTestServer(fs, outcome, nil)
+	if rec := postVerdict(t, s, sub); rec.Code != http.StatusCreated {
+		t.Fatalf("first post = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	second := sub
+	second.ScanID = "scan-control-transition"
+	second.Timestamp = sub.Timestamp.Add(time.Second)
+	check := second.Checks["aws.ebs.encryption"]
+	check.Result.Status = checks.StatusFail
+	check.Accounts["123456789012"] = checks.Result{Status: checks.StatusFail, Findings: []string{"new unencrypted volume"}}
+	second.Checks["aws.ebs.encryption"] = check
+	second.ResultsHash = hashAttestedContent(second.AttestedContent)
+	userData, err := hex.DecodeString(second.ResultsHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondOutcome := outcome
+	secondOutcome.UserData = userData
+	s.verifyFn = func(_ []byte, _ verify.Options) (verify.Outcome, error) { return secondOutcome, nil }
+	if rec := postVerdict(t, s, second); rec.Code != http.StatusCreated {
+		t.Fatalf("second post = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/share/token-123456789012/history/aws.ebs.encryption", nil)
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Transitions []struct {
+			PreviousStatus string `json:"previous_status"`
+			CurrentStatus  string `json:"current_status"`
+		} `json:"transitions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Transitions) != 2 {
+		t.Fatalf("transitions = %#v", response.Transitions)
+	}
+	if response.Transitions[0].PreviousStatus != "" || response.Transitions[0].CurrentStatus != checks.StatusPass {
+		t.Errorf("baseline = %#v", response.Transitions[0])
+	}
+	if response.Transitions[1].PreviousStatus != checks.StatusPass || response.Transitions[1].CurrentStatus != checks.StatusFail {
+		t.Errorf("change = %#v", response.Transitions[1])
+	}
+}
+
 func TestHandleHistory_UnknownTokenIs404(t *testing.T) {
 	fs := newFakeStore()
 	s := newTestServer(fs, verify.Outcome{}, nil)

@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import { fetchShare, ShareFetchError } from "./api";
 import type { ShareResponse } from "./verify/types";
-import { verifyShareResponse, type VerificationResult } from "./verify/verifier";
+import { verifyShareResponse, type CheckOutcome, type VerificationResult } from "./verify/verifier";
 import { StatusBanner } from "./components/StatusBanner";
 import { CoverageHeadline } from "./components/CoverageHeadline";
 import { ControlList } from "./components/ControlList";
@@ -10,6 +10,7 @@ import { AttestationDetails } from "./components/AttestationDetails";
 import { VerificationPanel } from "./components/VerificationPanel";
 import { QuestionnaireAutofill } from "./components/QuestionnaireAutofill";
 import { AIPosture } from "./components/AIPosture";
+import { ScopeSection } from "./components/ScopeSection";
 
 /** Default freshness window: 30 days. Configurable via VITE_FRESHNESS_WINDOW_MS — see verify/freshness.ts. */
 const DEFAULT_FRESHNESS_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -39,6 +40,8 @@ type PageState =
 
 function App() {
   const [state, setState] = useState<PageState>({ phase: "loading" });
+  const [diffCheck, setDiffCheck] = useState<CheckOutcome | undefined>();
+  const onDiffCheck = useCallback((check: CheckOutcome) => setDiffCheck(check), []);
 
   useEffect(() => {
     const token = tokenFromLocation();
@@ -52,7 +55,10 @@ function App() {
       try {
         const resp = await fetchShare(token);
         const result = await verifyShareResponse(resp, { freshnessWindowMs: freshnessWindowMs() });
-        if (!cancelled) setState({ phase: "done", resp, result });
+        if (!cancelled) {
+          setDiffCheck(undefined);
+          setState({ phase: "done", resp, result });
+        }
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof ShareFetchError ? err.message : `Unexpected error: ${(err as Error).message}`;
@@ -104,6 +110,8 @@ function App() {
             <CoverageHeadline resp={state.resp} verified={state.result.status === "verified"} />
           </section>
 
+          {state.result.status === "verified" && <ScopeSection token={tokenFromLocation() ?? ""} onDiffCheck={onDiffCheck} />}
+
           <section className="page__section">
             <div className="section-heading">
               <div>
@@ -133,9 +141,9 @@ function App() {
                 <span className="section-heading__index">03</span>
                 <h2>Proof chain</h2>
               </div>
-              <p>Six checks performed locally. The API cannot mark itself verified.</p>
+              <p>Seven checks performed locally. The API cannot mark the report or its changes verified.</p>
             </div>
-            <VerificationPanel result={state.result} />
+            <VerificationPanel result={state.result} additionalChecks={diffCheck ? [diffCheck] : []} />
           </section>
 
           <section className="page__section page__section--evidence">

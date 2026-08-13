@@ -51,22 +51,28 @@ type AttestedContent struct {
 	// ScannerVersion is the immutable Git tag whose pcrs.json describes
 	// this binary. Omitempty preserves verification of reports issued before
 	// this field existed; current scanners always set it.
-	ScannerVersion       string                 `json:"scanner_version,omitempty"`
-	OrganizationVerified bool                   `json:"organization_verified,omitempty"`
-	OrgID                string                 `json:"org_id,omitempty"`
-	NoOrganization       bool                   `json:"no_organization,omitempty"`
-	OrganizationWarning  string                 `json:"organization_warning,omitempty"`
-	AccountsListed       []string               `json:"accounts_listed,omitempty"`
-	AccountsScanned      []string               `json:"accounts_scanned,omitempty"`
-	AccountID            string                 `json:"account_id"`
-	ScopeVerified        bool                   `json:"scope_verified"`
-	ScopeWarning         string                 `json:"scope_warning,omitempty"`
-	TimeVerified         bool                   `json:"time_verified"`
-	TimeWarning          string                 `json:"time_warning,omitempty"`
-	RequestedRegions     []string               `json:"requested_regions"`
-	ScannedRegions       []string               `json:"scanned_regions"`
-	RegionsWarning       string                 `json:"regions_warning,omitempty"`
-	Checks               map[string]CheckOutput `json:"checks"`
+	ScannerVersion       string   `json:"scanner_version,omitempty"`
+	OrganizationVerified bool     `json:"organization_verified,omitempty"`
+	OrgID                string   `json:"org_id,omitempty"`
+	NoOrganization       bool     `json:"no_organization,omitempty"`
+	OrganizationWarning  string   `json:"organization_warning,omitempty"`
+	AccountsListed       []string `json:"accounts_listed,omitempty"`
+	AccountsScanned      []string `json:"accounts_scanned,omitempty"`
+	// Supabase organization scope is deliberately separate from AWS account
+	// scope. Project references are the complete denominator for the second
+	// provider and are sealed into the same attested hash as every finding.
+	SupabaseOrganizationID string                 `json:"supabase_organization_id,omitempty"`
+	ProjectsListed         []string               `json:"projects_listed,omitempty"`
+	ProjectsScanned        []string               `json:"projects_scanned,omitempty"`
+	AccountID              string                 `json:"account_id"`
+	ScopeVerified          bool                   `json:"scope_verified"`
+	ScopeWarning           string                 `json:"scope_warning,omitempty"`
+	TimeVerified           bool                   `json:"time_verified"`
+	TimeWarning            string                 `json:"time_warning,omitempty"`
+	RequestedRegions       []string               `json:"requested_regions"`
+	ScannedRegions         []string               `json:"scanned_regions"`
+	RegionsWarning         string                 `json:"regions_warning,omitempty"`
+	Checks                 map[string]CheckOutput `json:"checks"`
 }
 
 // AttestationOutput is the small chunk of a report describing the signed

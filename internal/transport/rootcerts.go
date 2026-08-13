@@ -6,11 +6,10 @@ import (
 	"fmt"
 )
 
-// The four files embedded below are the official Amazon Trust Services
-// root certificates, downloaded from https://www.amazontrust.com/repository/
-// (the same certificates every AWS SDK, browser, and OS trust store
-// already ships). They're the root of trust for every AWS API endpoint
-// this scanner talks to.
+// The roots embedded below are the explicit trust anchors for every HTTPS
+// provider endpoint ZeroDock calls: four Amazon Trust Services roots and the
+// Google Trust Services root currently used by Supabase. No system trust
+// store is consulted.
 //
 // go:embed compiles these PEM files directly INTO the binary at build
 // time — they become part of the program itself, not something read from
@@ -37,12 +36,20 @@ var amazonRootCA3 []byte
 //go:embed rootcerts/AmazonRootCA4.pem
 var amazonRootCA4 []byte
 
+// api.supabase.com currently chains through Google Trust Services. This is a
+// deliberately embedded root, not a SystemCertPool fallback: the enclave
+// trusts the same fixed set of roots even when its scratch image has no OS
+// certificate store. Review this pin when Supabase changes its certificate
+// chain.
+//
+//go:embed rootcerts/GTSRootR4.pem
+var gtsRootR4 []byte
+
 // NewRootCAPool builds a certificate pool containing ONLY the embedded
 // Amazon Trust Services roots above — nothing from the operating system,
 // nothing from any file on disk. Passing this pool as an *http.Client's
 // TLSClientConfig.RootCAs means that client will refuse to trust ANY
-// certificate that doesn't chain up to one of these four roots, which is
-// exactly right for a client that only ever talks to AWS.
+// certificate that doesn't chain up to one of these explicit roots.
 func NewRootCAPool() (*x509.CertPool, error) {
 	pool := x509.NewCertPool()
 
@@ -51,6 +58,7 @@ func NewRootCAPool() (*x509.CertPool, error) {
 		"AmazonRootCA2.pem": amazonRootCA2,
 		"AmazonRootCA3.pem": amazonRootCA3,
 		"AmazonRootCA4.pem": amazonRootCA4,
+		"GTSRootR4.pem":     gtsRootR4,
 	}
 	for name, pemBytes := range roots {
 		if !pool.AppendCertsFromPEM(pemBytes) {
