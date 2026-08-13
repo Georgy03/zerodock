@@ -91,6 +91,9 @@ func (c *Client) EnumerateScope(ctx context.Context) (Scope, error) {
 	if err := c.get(ctx, resourceManagerURL+"/v3/organizations:search", &organizations); err != nil {
 		return Scope{}, fmt.Errorf("list organizations (organization-scoped credential required): %w", err)
 	}
+	if len(organizations.Organizations) == 0 {
+		return Scope{}, fmt.Errorf("No GCP organization visible. Either this credential is project-scoped, or the projects are not under an organization. ZeroDock requires org-level access to guarantee complete coverage. Run `gcloud organizations list` to check which applies, then grant organization-level Resource Manager visibility")
+	}
 	if len(organizations.Organizations) != 1 {
 		return Scope{}, fmt.Errorf("GCP credential sees %d organizations; configure one organization-scoped credential per scan", len(organizations.Organizations))
 	}

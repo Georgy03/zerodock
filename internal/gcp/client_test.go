@@ -32,6 +32,10 @@ func TestEnumerateScopeRecursesFoldersAndSortsProjects(t *testing.T) {
 		case r.URL.Path == "/v3/projects" && r.URL.Query().Get("parent") == "folders/456":
 			return `{"projects":[{"projectId":"a-child","state":"ACTIVE"}]}`
 		case r.URL.Path == "/v3/folders" && r.URL.Query().Get("parent") == "folders/456":
+			return `{"folders":[{"name":"folders/789","state":"ACTIVE"}]}`
+		case r.URL.Path == "/v3/projects" && r.URL.Query().Get("parent") == "folders/789":
+			return `{"projects":[{"projectId":"m-grandchild","state":"ACTIVE"}]}`
+		case r.URL.Path == "/v3/folders" && r.URL.Query().Get("parent") == "folders/789":
 			return `{}`
 		default:
 			t.Fatalf("unexpected Resource Manager request: %s", r.URL)
@@ -46,7 +50,7 @@ func TestEnumerateScopeRecursesFoldersAndSortsProjects(t *testing.T) {
 	if scope.OrganizationID != "123" {
 		t.Fatalf("organization ID = %q", scope.OrganizationID)
 	}
-	if got := strings.Join(scope.Projects, ","); got != "a-child,z-root" {
+	if got := strings.Join(scope.Projects, ","); got != "a-child,m-grandchild,z-root" {
 		t.Fatalf("projects = %q", got)
 	}
 }
@@ -54,7 +58,7 @@ func TestEnumerateScopeRecursesFoldersAndSortsProjects(t *testing.T) {
 func TestEnumerateScopeRejectsEmptyOrganizationList(t *testing.T) {
 	client := jsonClient(t, func(*http.Request) string { return `{}` })
 	_, err := client.EnumerateScope(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "organization") {
+	if err == nil || !strings.Contains(err.Error(), "No GCP organization visible") || !strings.Contains(err.Error(), "gcloud organizations list") {
 		t.Fatalf("empty organization result must fail closed, got %v", err)
 	}
 }

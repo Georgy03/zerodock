@@ -309,7 +309,11 @@ report hash. A project-only credential is rejected: an empty organization list
 cannot safely be called a “no organization” estate, because it is
 indistinguishable from a credential deliberately limited to one project.
 This is an explicit fail-closed no-organization outcome, rather than a false
-coverage claim.
+coverage claim. The scanner explains the recovery path directly: run
+`gcloud organizations list`. If it returns no organization, create or attach
+one through Google Workspace/Cloud Identity before onboarding; if it returns
+an organization, grant the scanner's WIF principal or fallback service account
+organization-level Resource Manager visibility.
 
 GCP checks are provider-attested and cover public Storage IAM grants, uniform
 bucket access, aged service-account keys, primitive project roles, open VPC

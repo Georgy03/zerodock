@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeCoverage } from "./coverage";
+import { summarizeCoverage, summarizeGCPCoverage } from "./coverage";
 
 describe("summarizeCoverage", () => {
   it("produces the signed organization-wide 18 of 18 headline", () => {
@@ -24,5 +24,17 @@ describe("summarizeCoverage", () => {
 
     expect(summary.known).toBe(false);
     expect(summary.note).toBe("AccessDenied");
+  });
+});
+
+describe("summarizeGCPCoverage", () => {
+  it("keeps the GCP project denominator independent from AWS account coverage", () => {
+    const summary = summarizeGCPCoverage({
+      gcp_organization_id: "123456789",
+      gcp_projects_listed: ["one", "two", "three", "four"],
+      gcp_projects_scanned: ["one", "two", "three", "four"],
+    });
+    expect(summary).toMatchObject({ known: true, scanned: 4, listed: 4 });
+    expect(summary?.note).toContain("GCP Organization");
   });
 });

@@ -302,6 +302,29 @@ select {
   max-width: 25rem;
 }
 
+.coverage-headline__provider {
+  border-top: 1px solid #454641;
+  margin-top: 1.5rem;
+  padding-top: 1.2rem;
+  width: 100%;
+}
+
+.coverage-headline__provider-label {
+  color: #aaa9a3;
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.coverage-headline__provider-ratio {
+  font-size: 2.15rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  margin-top: 0.45rem;
+}
+
 .badge {
   font-size: 0.68rem;
   font-weight: 800;

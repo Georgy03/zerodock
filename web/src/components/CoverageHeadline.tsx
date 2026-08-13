@@ -1,5 +1,5 @@
 import type { ShareResponse } from "../verify/types";
-import { summarizeCoverage } from "./coverage";
+import { summarizeCoverage, summarizeGCPCoverage } from "./coverage";
 
 /**
  * Coverage means accounts scanned out of accounts that exist. The current
@@ -8,6 +8,7 @@ import { summarizeCoverage } from "./coverage";
  */
 export function CoverageHeadline({ resp, verified }: { resp: ShareResponse; verified: boolean }) {
   const coverage = summarizeCoverage(resp);
+  const gcpCoverage = summarizeGCPCoverage(resp);
 
   return (
     <div className={`coverage-headline${verified ? "" : " coverage-headline--unverified"}`}>
@@ -24,6 +25,15 @@ export function CoverageHeadline({ resp, verified }: { resp: ShareResponse; veri
       )}
       <div className="coverage-headline__label">accounts scanned</div>
       <div className="coverage-headline__note">{coverage.note}</div>
+      {gcpCoverage && (
+        <div className="coverage-headline__provider" aria-label="GCP project coverage">
+          <div className="coverage-headline__provider-label">GCP project coverage</div>
+          <div className="coverage-headline__provider-ratio">
+            {gcpCoverage.known ? `${gcpCoverage.scanned}/${gcpCoverage.listed}` : "Unknown"}
+          </div>
+          <div className="coverage-headline__note">{gcpCoverage.note}</div>
+        </div>
+      )}
     </div>
   );
 }
